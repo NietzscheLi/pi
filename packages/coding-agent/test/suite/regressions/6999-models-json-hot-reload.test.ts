@@ -10,6 +10,7 @@ import { ModelSelectorComponent } from "../../../src/modes/interactive/component
 import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../../../src/utils/ansi.ts";
 import { createModelRegistry, getModelRuntime } from "../../model-runtime-test-utils.ts";
+import { createNoopBalanceReader } from "../../model-selector-test-utils.ts";
 
 function observeRefreshRender(): { tui: TUI; renderedAfterRefresh: Promise<void> } {
 	let renderCount = 0;
@@ -74,11 +75,17 @@ describe("issue #6999 models.json hot reload", () => {
 			[],
 			() => {},
 			() => {},
+			undefined,
+			createNoopBalanceReader(),
 		);
 
 		await renderedAfterRefresh;
-		const rendered = stripAnsi(selector.render(120).join("\n"));
-		expect(rendered).toContain("new-model [new-provider]");
-		expect(rendered).not.toContain("old-model [old-provider]");
+		let rendered = stripAnsi(selector.render(120).join("\n"));
+		expect(rendered).toContain("new-provider");
+		expect(rendered).not.toContain("old-provider");
+		selector.handleInput("\r");
+		rendered = stripAnsi(selector.render(120).join("\n"));
+		expect(rendered).toContain("new-model");
+		expect(rendered).not.toContain("old-model");
 	});
 });

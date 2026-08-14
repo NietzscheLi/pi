@@ -4,6 +4,7 @@ import { KeybindingsManager } from "../../../src/core/keybindings.ts";
 import { ModelSelectorComponent } from "../../../src/modes/interactive/components/model-selector.ts";
 import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../../../src/utils/ansi.ts";
+import { createNoopBalanceReader } from "../../model-selector-test-utils.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
 function createFakeTui(): TUI {
@@ -14,9 +15,12 @@ function createFakeTui(): TUI {
 function selectedModelId(rendered: string): string | undefined {
 	const line = rendered.split("\n").find((l) => l.startsWith("→ "));
 	if (!line) return undefined;
-	const rest = line.replace(/^→\s*/, "");
-	const id = rest.split(" [")[0];
-	return id?.trim() || undefined;
+	return (
+		line
+			.replace(/^→\s*/, "")
+			.replace(/\s*✓.*$/, "")
+			.trim() || undefined
+	);
 }
 
 describe("model selector filter resets selection to top", () => {
@@ -56,6 +60,8 @@ describe("model selector filter resets selection to top", () => {
 			[],
 			() => {},
 			() => {},
+			undefined,
+			createNoopBalanceReader(),
 		);
 
 		await vi.waitFor(() => {
@@ -63,7 +69,8 @@ describe("model selector filter resets selection to top", () => {
 			expect(rendered).toContain("Model catalogs refreshed.");
 		});
 
-		// Current model (alpha-1) is sorted first, so selection starts on row 0.
+		selector.handleInput("\r");
+		// Current model (alpha-1) is sorted first inside the selected provider.
 		expect(selectedModelId(stripAnsi(selector.render(120).join("\n")))).toBe("alpha-1");
 
 		// Move selection down two rows to alpha-3.
@@ -107,6 +114,8 @@ describe("model selector filter resets selection to top", () => {
 			[{ model: alpha2 }, { model: alpha3 }, { model: alpha1 }],
 			() => {},
 			() => {},
+			undefined,
+			createNoopBalanceReader(),
 		);
 
 		await vi.waitFor(() => {
@@ -114,7 +123,8 @@ describe("model selector filter resets selection to top", () => {
 			expect(rendered).toContain("Model catalogs refreshed.");
 		});
 
-		// Selection starts on the current model (alpha-1), which is row 2 here.
+		selector.handleInput("\r");
+		// Selection starts on the current model (alpha-1), which is row 2 inside the provider.
 		expect(selectedModelId(stripAnsi(selector.render(120).join("\n")))).toBe("alpha-1");
 
 		// Type a query matching all three scoped models. Selection must move to

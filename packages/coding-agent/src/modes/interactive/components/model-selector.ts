@@ -10,6 +10,11 @@ import {
 	type TUI,
 } from "@earendil-works/pi-tui";
 import type { ModelRuntime } from "../../../core/model-runtime.ts";
+import {
+	formatProviderBalance,
+	type ProviderBalanceReader,
+	providerBalanceService,
+} from "../../../core/provider-balance.ts";
 import type { SettingsManager } from "../../../core/settings-manager.ts";
 import { refreshModelCatalogs } from "../model-catalog-refresh.ts";
 import { getModelSelectorSearchText } from "../model-search.ts";
@@ -23,15 +28,22 @@ interface ModelItem {
 	model: Model<any>;
 }
 
+interface ProviderItem {
+	id: string;
+	name: string;
+	models: ModelItem[];
+}
+
 interface ScopedModelItem {
 	model: Model<any>;
 	thinkingLevel?: string;
 }
 
 type ModelScope = "all" | "scoped";
+type SelectorView = "providers" | "models";
 
 /**
- * Component that renders a model selector with search
+ * Component that renders a two-level provider and model selector with search.
  */
 export class ModelSelectorComponent extends Container implements Focusable {
 	private searchInput: Input;
@@ -45,15 +57,23 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		this._focused = value;
 		this.searchInput.focused = value;
 	}
+
 	private listContainer: Container;
 	private allModels: ModelItem[] = [];
 	private scopedModelItems: ModelItem[] = [];
 	private activeModels: ModelItem[] = [];
+	private providerItems: ProviderItem[] = [];
+	private filteredProviders: ProviderItem[] = [];
 	private filteredModels: ModelItem[] = [];
-	private selectedIndex: number = 0;
+	private selectedProviderIndex = 0;
+	private selectedModelIndex = 0;
+	private selectedProviderId?: string;
+	private selectedModelId?: string;
+	private providerOwnQueryMatches = new Set<string>();
 	private currentModel?: Model<any>;
 	private settingsManager: SettingsManager;
 	private modelRuntime: ModelRuntime;
+	private balanceService: ProviderBalanceReader;
 	private onSelectCallback: (model: Model<any>) => void;
 	private onCancelCallback: () => void;
 	private errorMessage?: string;
@@ -62,10 +82,14 @@ export class ModelSelectorComponent extends Container implements Focusable {
 	private tui: TUI;
 	private scopedModels: ReadonlyArray<ScopedModelItem>;
 	private scope: ModelScope = "all";
+	private view: SelectorView = "providers";
 	private scopeText?: Text;
 	private scopeHintText?: Text;
+	private viewText: Text;
 	private readonly refreshAbortController = new AbortController();
 	private refreshTimeout?: ReturnType<typeof setTimeout>;
+	private unsubscribeBalance?: () => void;
+	private requestedBalanceProvider?: string;
 	private closed = false;
 
 	constructor(
@@ -77,6 +101,7 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		onSelect: (model: Model<any>) => void,
 		onCancel: () => void,
 		initialSearchInput?: string,
+		balanceService: ProviderBalanceReader = providerBalanceService,
 	) {
 		super();
 
@@ -84,16 +109,15 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		this.currentModel = currentModel;
 		this.settingsManager = settingsManager;
 		this.modelRuntime = modelRuntime;
+		this.balanceService = balanceService;
 		this.scopedModels = scopedModels;
 		this.scope = scopedModels.length > 0 ? "scoped" : "all";
 		this.onSelectCallback = onSelect;
 		this.onCancelCallback = onCancel;
 
-		// Add top border
 		this.addChild(new DynamicBorder());
 		this.addChild(new Spacer(1));
 
-		// Add hint about model filtering
 		if (scopedModels.length > 0) {
 			this.scopeText = new Text(this.getScopeText(), 0, 0);
 			this.addChild(this.scopeText);
@@ -103,41 +127,36 @@ export class ModelSelectorComponent extends Container implements Focusable {
 			const hintText = "Only showing models from configured providers. Use /login to add providers.";
 			this.addChild(new Text(theme.fg("warning", hintText), 0, 0));
 		}
+		this.viewText = new Text("", 0, 0);
+		this.addChild(this.viewText);
 		this.addChild(new Spacer(1));
 
-		// Create search input
 		this.searchInput = new Input();
-		if (initialSearchInput) {
-			this.searchInput.setValue(initialSearchInput);
-		}
-		this.searchInput.onSubmit = () => {
-			// Enter on search input selects the first filtered item
-			if (this.filteredModels[this.selectedIndex]) {
-				this.handleSelect(this.filteredModels[this.selectedIndex].model);
-			}
-		};
+		if (initialSearchInput) this.searchInput.setValue(initialSearchInput);
+		this.searchInput.onSubmit = () => this.confirmSelection();
 		this.addChild(this.searchInput);
 
 		this.addChild(new Spacer(1));
-
-		// Create list container
 		this.listContainer = new Container();
 		this.addChild(this.listContainer);
-
 		this.addChild(new Spacer(1));
-
-		// Add bottom border
 		this.addChild(new DynamicBorder());
+
+		this.unsubscribeBalance = this.balanceService.subscribe((providerName) => {
+			if (providerName !== this.getSelectedProvider()?.id || this.closed) return;
+			this.updateList();
+			this.tui.requestRender();
+		});
 
 		// Render the current snapshot immediately, then refresh in the background.
 		this.loadModelsFromSnapshot();
-		if (initialSearchInput) this.filterModels(initialSearchInput);
-		else this.updateList();
+		this.filterItems(this.searchInput.getValue(), Boolean(initialSearchInput));
 		this.tui.requestRender();
 		void this.refreshModels();
 	}
 
 	private loadModelsFromSnapshot(): void {
+		const previousProviderId = this.selectedProviderId ?? this.currentModel?.provider;
 		const models = this.modelRuntime.getAvailableSnapshot().map((model: Model<any>) => ({
 			provider: model.provider,
 			id: model.id,
@@ -154,10 +173,29 @@ export class ModelSelectorComponent extends Container implements Focusable {
 			model: scoped.model,
 		}));
 		this.activeModels = this.scope === "scoped" ? this.scopedModelItems : this.allModels;
-		this.filteredModels = this.activeModels;
-		const currentIndex = this.filteredModels.findIndex((item) => modelsAreEqual(this.currentModel, item.model));
-		this.selectedIndex =
-			currentIndex >= 0 ? currentIndex : Math.min(this.selectedIndex, Math.max(0, this.filteredModels.length - 1));
+		this.rebuildProviderItems();
+
+		const providerIndex = this.providerItems.findIndex((provider) => provider.id === previousProviderId);
+		this.selectedProviderIndex = providerIndex >= 0 ? providerIndex : 0;
+		this.selectedProviderId = this.providerItems[this.selectedProviderIndex]?.id;
+		if (this.view === "models" && providerIndex < 0) this.view = "providers";
+	}
+
+	private rebuildProviderItems(): void {
+		const providers = new Map<string, ProviderItem>();
+		for (const item of this.activeModels) {
+			let provider = providers.get(item.provider);
+			if (!provider) {
+				provider = {
+					id: item.provider,
+					name: this.modelRuntime.getProvider(item.provider)?.name ?? item.provider,
+					models: [],
+				};
+				providers.set(item.provider, provider);
+			}
+			provider.models.push(item);
+		}
+		this.providerItems = [...providers.values()];
 	}
 
 	private async refreshModels(): Promise<void> {
@@ -185,7 +223,7 @@ export class ModelSelectorComponent extends Container implements Focusable {
 				}
 			}
 			this.loadModelsFromSnapshot();
-			this.filterModels(this.searchInput.getValue());
+			this.filterItems(this.searchInput.getValue(), false);
 			this.tui.requestRender();
 		} catch (error) {
 			if (this.closed) return;
@@ -205,11 +243,13 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		this.closed = true;
 		if (this.refreshTimeout) clearTimeout(this.refreshTimeout);
 		this.refreshAbortController.abort();
+		this.unsubscribeBalance?.();
+		this.unsubscribeBalance = undefined;
 	}
 
 	private sortModels(models: ModelItem[]): ModelItem[] {
 		const sorted = [...models];
-		// Sort: current model first, then by provider
+		// Sort: current model first, then by provider. Stable sort preserves provider catalog order.
 		sorted.sort((a, b) => {
 			const aIsCurrent = modelsAreEqual(this.currentModel, a.model);
 			const bIsCurrent = modelsAreEqual(this.currentModel, b.model);
@@ -232,84 +272,191 @@ export class ModelSelectorComponent extends Container implements Focusable {
 
 	private setScope(scope: ModelScope): void {
 		if (this.scope === scope) return;
+		const previousProviderId = this.selectedProviderId;
 		this.scope = scope;
 		this.activeModels = this.scope === "scoped" ? this.scopedModelItems : this.allModels;
-		const currentIndex = this.activeModels.findIndex((item) => modelsAreEqual(this.currentModel, item.model));
-		this.selectedIndex = currentIndex >= 0 ? currentIndex : 0;
-		this.filterModels(this.searchInput.getValue());
-		if (this.scopeText) {
-			this.scopeText.setText(this.getScopeText());
-		}
+		this.rebuildProviderItems();
+		const providerIndex = this.providerItems.findIndex((provider) => provider.id === previousProviderId);
+		if (this.view === "models" && providerIndex < 0) this.view = "providers";
+		this.selectedProviderIndex = providerIndex >= 0 ? providerIndex : 0;
+		this.selectedProviderId = this.providerItems[this.selectedProviderIndex]?.id;
+		if (this.scopeText) this.scopeText.setText(this.getScopeText());
+		this.filterItems(this.searchInput.getValue(), false);
 	}
 
-	private filterModels(query: string): void {
-		this.filteredModels = query
-			? fuzzyFilter(this.activeModels, query, ({ id, provider, model }) =>
-					getModelSelectorSearchText({ id, provider, name: model.name }),
-				)
-			: this.activeModels;
-		// When filtering by a query, move the selector to the top row so the best
-		// match is highlighted. When the query is cleared, keep the current position
-		// clamped to the (restored) list length.
-		this.selectedIndex = query ? 0 : Math.min(this.selectedIndex, Math.max(0, this.filteredModels.length - 1));
+	private filterItems(query: string, resetSelection: boolean): void {
+		if (this.view === "providers") {
+			const previousProviderId = this.selectedProviderId;
+			this.providerOwnQueryMatches = new Set(
+				query
+					? fuzzyFilter(this.providerItems, query, (provider) => `${provider.id} ${provider.name}`).map(
+							(provider) => provider.id,
+						)
+					: [],
+			);
+			const matchingProviders = query
+				? this.providerItems.filter(
+						(provider) =>
+							this.providerOwnQueryMatches.has(provider.id) ||
+							provider.models.some(
+								(model) =>
+									fuzzyFilter([model], query, ({ id, provider: providerId, model: value }) =>
+										getModelSelectorSearchText({ id, provider: providerId, name: value.name }),
+									).length > 0,
+							),
+					)
+				: this.providerItems;
+			this.filteredProviders = query
+				? fuzzyFilter(matchingProviders, query, (provider) => {
+						const modelText = provider.models
+							.map(({ id, model }) =>
+								getModelSelectorSearchText({ id, provider: provider.id, name: model.name }),
+							)
+							.join(" ");
+						return `${provider.id} ${provider.name} ${modelText}`;
+					})
+				: matchingProviders;
+			if (resetSelection) {
+				this.selectedProviderIndex = 0;
+			} else {
+				const previousIndex = this.filteredProviders.findIndex((provider) => provider.id === previousProviderId);
+				this.selectedProviderIndex =
+					previousIndex >= 0
+						? previousIndex
+						: Math.min(this.selectedProviderIndex, Math.max(0, this.filteredProviders.length - 1));
+			}
+			this.selectedProviderId = this.filteredProviders[this.selectedProviderIndex]?.id;
+		} else {
+			const provider = this.providerItems.find((item) => item.id === this.selectedProviderId);
+			const models = provider?.models ?? [];
+			this.filteredModels = query
+				? fuzzyFilter(
+						models,
+						query,
+						({ id, provider: providerId, model }) =>
+							`${getModelSelectorSearchText({ id, provider: providerId, name: model.name })} ${provider?.name ?? ""}`,
+					)
+				: models;
+			if (resetSelection) {
+				this.selectedModelIndex = 0;
+			} else {
+				const previousIndex = this.filteredModels.findIndex((item) => item.id === this.selectedModelId);
+				const currentIndex = this.filteredModels.findIndex((item) => modelsAreEqual(this.currentModel, item.model));
+				this.selectedModelIndex =
+					previousIndex >= 0
+						? previousIndex
+						: currentIndex >= 0
+							? currentIndex
+							: Math.min(this.selectedModelIndex, Math.max(0, this.filteredModels.length - 1));
+			}
+			this.selectedModelId = this.filteredModels[this.selectedModelIndex]?.id;
+		}
 		this.updateList();
+		this.requestSelectedProviderBalance();
+	}
+
+	private getSelectedProvider(): ProviderItem | undefined {
+		if (this.view === "providers") return this.filteredProviders[this.selectedProviderIndex];
+		return this.providerItems.find((provider) => provider.id === this.selectedProviderId);
+	}
+
+	private requestSelectedProviderBalance(): void {
+		const providerId = this.getSelectedProvider()?.id;
+		if (!providerId || providerId === this.requestedBalanceProvider) return;
+		this.requestedBalanceProvider = providerId;
+		const model = this.getSelectedProvider()?.models[0]?.model;
+		void this.balanceService.refresh(providerId, {
+			resolveSource: async () => ({
+				baseUrl: model?.baseUrl,
+				apiKey: (await this.modelRuntime.getAuth(providerId))?.auth.apiKey,
+			}),
+		});
+	}
+
+	private updateViewText(): void {
+		if (this.view === "providers") {
+			this.viewText.setText(theme.fg("muted", "Providers"));
+			return;
+		}
+		const provider = this.getSelectedProvider();
+		const label = provider ? this.providerLabel(provider) : this.selectedProviderId;
+		this.viewText.setText(`${theme.fg("muted", "Providers / ")}${theme.fg("accent", label ?? "")}`);
+	}
+
+	private providerLabel(provider: ProviderItem): string {
+		return provider.name === provider.id ? provider.id : `${provider.name} [${provider.id}]`;
+	}
+
+	private addBalanceDetail(provider: ProviderItem): void {
+		const balance = this.balanceService.get(provider.id);
+		const value = formatProviderBalance(balance);
+		this.listContainer.addChild(
+			new Text(`${theme.fg("muted", "  Balance: ")}${theme.fg(balance.error ? "warning" : "text", value)}`, 0, 0),
+		);
 	}
 
 	private updateList(): void {
 		this.listContainer.clear();
+		this.updateViewText();
 
 		const maxVisible = 10;
-		const startIndex = Math.max(
-			0,
-			Math.min(this.selectedIndex - Math.floor(maxVisible / 2), this.filteredModels.length - maxVisible),
-		);
-		const endIndex = Math.min(startIndex + maxVisible, this.filteredModels.length);
+		const items = this.view === "providers" ? this.filteredProviders : this.filteredModels;
+		const selectedIndex = this.view === "providers" ? this.selectedProviderIndex : this.selectedModelIndex;
+		const startIndex = Math.max(0, Math.min(selectedIndex - Math.floor(maxVisible / 2), items.length - maxVisible));
+		const endIndex = Math.min(startIndex + maxVisible, items.length);
 
-		// Show visible slice of filtered models
 		for (let i = startIndex; i < endIndex; i++) {
-			const item = this.filteredModels[i];
+			const item = items[i];
 			if (!item) continue;
-
-			const isSelected = i === this.selectedIndex;
-			const isCurrent = modelsAreEqual(this.currentModel, item.model);
-
-			let line = "";
-			if (isSelected) {
-				const prefix = theme.fg("accent", "→ ");
-				const modelText = `${item.id}`;
-				const providerBadge = theme.fg("muted", `[${item.provider}]`);
-				const checkmark = isCurrent ? theme.fg("success", " ✓") : "";
-				line = `${prefix + theme.fg("accent", modelText)} ${providerBadge}${checkmark}`;
+			const isSelected = i === selectedIndex;
+			let label: string;
+			let isCurrent: boolean;
+			if (this.view === "providers") {
+				const provider = item as ProviderItem;
+				label = `${this.providerLabel(provider)} ${theme.fg("muted", `(${provider.models.length} models)`)}`;
+				isCurrent = provider.id === this.currentModel?.provider;
 			} else {
-				const modelText = `  ${item.id}`;
-				const providerBadge = theme.fg("muted", `[${item.provider}]`);
-				const checkmark = isCurrent ? theme.fg("success", " ✓") : "";
-				line = `${modelText} ${providerBadge}${checkmark}`;
+				const model = item as ModelItem;
+				label = model.id;
+				isCurrent = modelsAreEqual(this.currentModel, model.model);
 			}
 
-			this.listContainer.addChild(new Text(line, 0, 0));
+			const prefix = isSelected ? theme.fg("accent", "→ ") : "  ";
+			const itemText = isSelected ? theme.fg("accent", label) : label;
+			const checkmark = isCurrent ? theme.fg("success", " ✓") : "";
+			this.listContainer.addChild(new Text(`${prefix}${itemText}${checkmark}`, 0, 0));
 		}
 
-		// Add scroll indicator if needed
-		if (startIndex > 0 || endIndex < this.filteredModels.length) {
-			const scrollInfo = theme.fg("muted", `  (${this.selectedIndex + 1}/${this.filteredModels.length})`);
-			this.listContainer.addChild(new Text(scrollInfo, 0, 0));
+		if (startIndex > 0 || endIndex < items.length) {
+			this.listContainer.addChild(new Text(theme.fg("muted", `  (${selectedIndex + 1}/${items.length})`), 0, 0));
 		}
 
-		// Show error message or "no results" if empty
 		if (this.errorMessage) {
-			// Show error in red
-			const errorLines = this.errorMessage.split("\n");
-			for (const line of errorLines) {
+			for (const line of this.errorMessage.split("\n")) {
 				this.listContainer.addChild(new Text(theme.fg("error", line), 0, 0));
 			}
-		} else if (this.filteredModels.length === 0) {
-			this.listContainer.addChild(new Text(theme.fg("muted", "  No matching models"), 0, 0));
-		} else {
-			const selected = this.filteredModels[this.selectedIndex];
-			this.listContainer.addChild(new Spacer(1));
-			this.listContainer.addChild(new Text(theme.fg("muted", `  Model Name: ${selected.model.name}`), 0, 0));
+		} else if (items.length === 0) {
+			this.listContainer.addChild(
+				new Text(
+					theme.fg("muted", this.view === "providers" ? "  No matching providers" : "  No matching models"),
+					0,
+					0,
+				),
+			);
 		}
+
+		const provider = this.getSelectedProvider();
+		if (provider) {
+			this.listContainer.addChild(new Spacer(1));
+			this.addBalanceDetail(provider);
+			if (this.view === "models" && this.filteredModels.length > 0) {
+				const selected = this.filteredModels[this.selectedModelIndex];
+				if (selected) {
+					this.listContainer.addChild(new Text(theme.fg("muted", `  Model Name: ${selected.model.name}`), 0, 0));
+				}
+			}
+		}
+
 		if (this.refreshStatusMessage) {
 			this.listContainer.addChild(new Spacer(1));
 			this.listContainer.addChild(
@@ -318,52 +465,72 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		}
 	}
 
+	private moveSelection(direction: -1 | 1): void {
+		const length = this.view === "providers" ? this.filteredProviders.length : this.filteredModels.length;
+		if (length === 0) return;
+		if (this.view === "providers") {
+			this.selectedProviderIndex = (this.selectedProviderIndex + direction + length) % length;
+			this.selectedProviderId = this.filteredProviders[this.selectedProviderIndex]?.id;
+		} else {
+			this.selectedModelIndex = (this.selectedModelIndex + direction + length) % length;
+			this.selectedModelId = this.filteredModels[this.selectedModelIndex]?.id;
+		}
+		this.updateList();
+		this.requestSelectedProviderBalance();
+	}
+
+	private confirmSelection(): void {
+		if (this.view === "providers") {
+			const provider = this.filteredProviders[this.selectedProviderIndex];
+			if (!provider) return;
+			this.selectedProviderId = provider.id;
+			this.view = "models";
+			this.selectedModelIndex = 0;
+			this.selectedModelId = provider.id === this.currentModel?.provider ? this.currentModel.id : undefined;
+			if (this.providerOwnQueryMatches.has(provider.id)) this.searchInput.setValue("");
+			this.filterItems(this.searchInput.getValue(), Boolean(this.searchInput.getValue()));
+			return;
+		}
+		const selectedModel = this.filteredModels[this.selectedModelIndex];
+		if (selectedModel) this.handleSelect(selectedModel.model);
+	}
+
+	private returnToProviders(): void {
+		this.view = "providers";
+		this.filterItems(this.searchInput.getValue(), false);
+	}
+
 	handleInput(keyData: string): void {
 		const kb = getKeybindings();
 		if (kb.matches(keyData, "tui.input.tab")) {
 			if (this.scopedModelItems.length > 0) {
-				const nextScope: ModelScope = this.scope === "all" ? "scoped" : "all";
-				this.setScope(nextScope);
-				if (this.scopeHintText) {
-					this.scopeHintText.setText(this.getScopeHintText());
-				}
+				this.setScope(this.scope === "all" ? "scoped" : "all");
+				if (this.scopeHintText) this.scopeHintText.setText(this.getScopeHintText());
 			}
 			return;
 		}
-		// Up arrow - wrap to bottom when at top
 		if (kb.matches(keyData, "tui.select.up")) {
-			if (this.filteredModels.length === 0) return;
-			this.selectedIndex = this.selectedIndex === 0 ? this.filteredModels.length - 1 : this.selectedIndex - 1;
-			this.updateList();
-		}
-		// Down arrow - wrap to top when at bottom
-		else if (kb.matches(keyData, "tui.select.down")) {
-			if (this.filteredModels.length === 0) return;
-			this.selectedIndex = this.selectedIndex === this.filteredModels.length - 1 ? 0 : this.selectedIndex + 1;
-			this.updateList();
-		}
-		// Enter
-		else if (kb.matches(keyData, "tui.select.confirm")) {
-			const selectedModel = this.filteredModels[this.selectedIndex];
-			if (selectedModel) {
-				this.handleSelect(selectedModel.model);
+			this.moveSelection(-1);
+		} else if (kb.matches(keyData, "tui.select.down")) {
+			this.moveSelection(1);
+		} else if (kb.matches(keyData, "tui.select.confirm")) {
+			this.confirmSelection();
+		} else if (kb.matches(keyData, "tui.select.cancel")) {
+			if (this.view === "models") {
+				this.returnToProviders();
+			} else {
+				this.dispose();
+				this.onCancelCallback();
 			}
-		}
-		// Escape or Ctrl+C
-		else if (kb.matches(keyData, "tui.select.cancel")) {
-			this.dispose();
-			this.onCancelCallback();
-		}
-		// Pass everything else to search input
-		else {
+		} else {
 			this.searchInput.handleInput(keyData);
-			this.filterModels(this.searchInput.getValue());
+			const query = this.searchInput.getValue();
+			this.filterItems(query, Boolean(query));
 		}
 	}
 
 	private handleSelect(model: Model<any>): void {
 		this.dispose();
-		// Save as new default
 		this.settingsManager.setDefaultModelAndProvider(model.provider, model.id);
 		this.onSelectCallback(model);
 	}

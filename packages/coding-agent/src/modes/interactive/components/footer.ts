@@ -162,19 +162,19 @@ export class FooterComponent implements Component {
 		if (areExperimentalFeaturesEnabled()) {
 			statsParts.push(`${theme.fg("dim", "•")} ${theme.bold(theme.fg("warning", "xp"))}`);
 		}
+		const nativeStatsLeft = statsParts.join(" ");
+
+		const extensionStatuses = Array.from(this.footerData.getExtensionStatuses().entries())
+			.sort(([a], [b]) => a.localeCompare(b))
+			.map(([, text]) => theme.fg("dim", sanitizeStatusText(text)));
+		for (const status of extensionStatuses) {
+			statsParts.push(theme.fg("dim", "•"), status);
+		}
 
 		let statsLeft = statsParts.join(" ");
 
 		// Add model name on the right side, plus thinking level if model supports it
 		const modelName = state.model?.id || "no-model";
-
-		let statsLeftWidth = visibleWidth(statsLeft);
-
-		// If statsLeft is too wide, truncate it
-		if (statsLeftWidth > width) {
-			statsLeft = truncateToWidth(statsLeft, width, "...");
-			statsLeftWidth = visibleWidth(statsLeft);
-		}
 
 		// Calculate available space for padding (minimum 2 spaces between stats and model)
 		const minPadding = 2;
@@ -190,34 +190,22 @@ export class FooterComponent implements Component {
 		// Prepend the provider in parentheses if there are multiple providers and there's enough room
 		let rightSide = rightSideWithoutProvider;
 		if (this.footerData.getAvailableProviderCount() > 1 && state.model) {
-			rightSide = `(${state.model!.provider}) ${rightSideWithoutProvider}`;
-			if (statsLeftWidth + minPadding + visibleWidth(rightSide) > width) {
-				// Too wide, fall back
-				rightSide = rightSideWithoutProvider;
-			}
+			const withProvider = `(${state.model.provider}) ${rightSideWithoutProvider}`;
+			if (visibleWidth(nativeStatsLeft) + minPadding + visibleWidth(withProvider) <= width) rightSide = withProvider;
 		}
 
+		// Keep both native columns visible. Extension statuses are appended to the left,
+		// so they are the first content truncated when the terminal is narrow.
+		const minimumLeftWidth = Math.min(visibleWidth(nativeStatsLeft), Math.max(0, Math.floor(width * 0.45)));
+		const maximumRightWidth = Math.max(0, width - minimumLeftWidth - minPadding);
+		rightSide = truncateToWidth(rightSide, maximumRightWidth, "");
 		const rightSideWidth = visibleWidth(rightSide);
-		const totalNeeded = statsLeftWidth + minPadding + rightSideWidth;
-
-		let statsLine: string;
-		if (totalNeeded <= width) {
-			// Both fit - add padding to right-align model
-			const padding = " ".repeat(width - statsLeftWidth - rightSideWidth);
-			statsLine = statsLeft + padding + rightSide;
-		} else {
-			// Need to truncate right side
-			const availableForRight = width - statsLeftWidth - minPadding;
-			if (availableForRight > 0) {
-				const truncatedRight = truncateToWidth(rightSide, availableForRight, "");
-				const truncatedRightWidth = visibleWidth(truncatedRight);
-				const padding = " ".repeat(Math.max(0, width - statsLeftWidth - truncatedRightWidth));
-				statsLine = statsLeft + padding + truncatedRight;
-			} else {
-				// Not enough space for right side at all
-				statsLine = statsLeft;
-			}
-		}
+		const availableLeft = Math.max(0, width - rightSideWidth - (rightSideWidth > 0 ? minPadding : 0));
+		statsLeft = truncateToWidth(statsLeft, availableLeft, "...");
+		const statsLeftWidth = visibleWidth(statsLeft);
+		const gapWidth = statsLeftWidth > 0 && rightSideWidth > 0 ? minPadding : 0;
+		const padding = " ".repeat(Math.max(gapWidth, width - statsLeftWidth - rightSideWidth));
+		const statsLine = statsLeft + padding + rightSide;
 
 		// Apply dim to each part separately. statsLeft may contain color codes (for context %)
 		// that end with a reset, which would clear an outer dim wrapper. So we dim the parts
@@ -227,19 +215,6 @@ export class FooterComponent implements Component {
 		const dimRemainder = theme.fg("dim", remainder);
 
 		const pwdLine = truncateToWidth(theme.fg("dim", pwd), width, theme.fg("dim", "..."));
-		const lines = [pwdLine, dimStatsLeft + dimRemainder];
-
-		// Add extension statuses on a single line, sorted by key alphabetically
-		const extensionStatuses = this.footerData.getExtensionStatuses();
-		if (extensionStatuses.size > 0) {
-			const sortedStatuses = Array.from(extensionStatuses.entries())
-				.sort(([a], [b]) => a.localeCompare(b))
-				.map(([, text]) => sanitizeStatusText(text));
-			const statusLine = sortedStatuses.join(" ");
-			// Truncate to terminal width with dim ellipsis for consistency with footer style
-			lines.push(truncateToWidth(statusLine, width, theme.fg("dim", "...")));
-		}
-
-		return lines;
+		return [pwdLine, dimStatsLeft + dimRemainder];
 	}
 }

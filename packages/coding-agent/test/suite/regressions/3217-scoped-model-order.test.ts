@@ -5,6 +5,7 @@ import { ModelSelectorComponent } from "../../../src/modes/interactive/component
 import { ScopedModelsSelectorComponent } from "../../../src/modes/interactive/components/scoped-models-selector.ts";
 import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../../../src/utils/ansi.ts";
+import { createNoopBalanceReader } from "../../model-selector-test-utils.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
 function createFakeTui(): TUI {
@@ -83,22 +84,19 @@ describe("issue #3217 scoped model ordering", () => {
 			[{ model: modelTwo }, { model: modelOne }, { model: modelThree }],
 			() => {},
 			() => {},
+			undefined,
+			createNoopBalanceReader(),
 		);
 
 		await vi.waitFor(() => {
 			const rendered = stripAnsi(selector.render(120).join("\n"));
-			expect(rendered).toContain(`[${modelOne.provider}]`);
+			expect(rendered).toContain(modelOne.provider);
 			expect(rendered).toContain("Model catalogs refreshed.");
 		});
 
-		const renderedLines = stripAnsi(selector.render(120).join("\n"))
-			.split("\n")
-			.filter((line) => line.includes(`[${modelOne.provider}]`));
-		const orderedIds = renderedLines.slice(0, 3).map((line) => {
-			const [modelId] = line.trim().replace(/^→\s*/, "").split(" [");
-			return modelId?.trim() ?? "";
-		});
-
-		expect(orderedIds).toEqual([modelTwo.id, modelOne.id, modelThree.id]);
+		selector.handleInput("\r");
+		const rendered = stripAnsi(selector.render(120).join("\n"));
+		expect(rendered.indexOf(modelTwo.id)).toBeLessThan(rendered.indexOf(modelOne.id));
+		expect(rendered.indexOf(modelOne.id)).toBeLessThan(rendered.indexOf(modelThree.id));
 	});
 });

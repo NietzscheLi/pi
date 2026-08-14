@@ -10,12 +10,14 @@
 - Added the `defaultTools` setting for configuring the initial built-in tool selection globally or per project.
 - Added `--use-theme <name[/name]>` to choose an initial per-run interactive theme without changing saved settings ([#7722](https://github.com/earendil-works/pi/pull/7722) by [@rwachtler](https://github.com/rwachtler)).
 - Added named presets for settings, packages, extensions, skills, and external MCP adapters, selectable per process with `--preset` or per project with `/preset`.
+- Added shared provider-balance queries for the interactive model selector and footer, including cached refreshes and `/update-balance`.
 
 ### Changed
 
 - Changed inherited Kimi Coding requests to use pi's runtime `User-Agent` header.
 - Replaced the inherited Mistral SDK transport with a native Chat Completions HTTP stream, eliminating its generated client and schema runtime overhead.
 - Documented the generic `AI_AGENT=pi` process marker and how it differs from `PI_CODING_AGENT=true` ([#7747](https://github.com/earendil-works/pi/issues/7747)).
+- Changed the interactive model selector to choose a provider before a model and merged extension statuses into the native footer stats row.
 
 ### Fixed
 

@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { AgentSession } from "../src/core/agent-session.ts";
 import type { ReadonlyFooterDataProvider } from "../src/core/footer-data-provider.ts";
 import { FooterComponent, formatCwdForFooter } from "../src/modes/interactive/components/footer.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
+import { initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
 type AssistantUsage = {
@@ -87,10 +87,13 @@ function createSession(options: {
 	return session as unknown as AgentSession;
 }
 
-function createFooterData(providerCount: number): ReadonlyFooterDataProvider {
+function createFooterData(
+	providerCount: number,
+	extensionStatuses: ReadonlyMap<string, string> = new Map(),
+): ReadonlyFooterDataProvider {
 	const provider = {
 		getGitBranch: () => "main",
-		getExtensionStatuses: () => new Map<string, string>(),
+		getExtensionStatuses: () => extensionStatuses,
 		getAvailableProviderCount: () => providerCount,
 		onBranchChange: (callback: () => void) => {
 			void callback;
@@ -248,5 +251,37 @@ describe("FooterComponent width handling", () => {
 
 		expect(stats).toContain("$1.234");
 		expect(stats).not.toContain("(sub)");
+	});
+
+	it("places extension statuses in the native stats row in stable key order", () => {
+		const session = createSession({ sessionName: "", modelId: "current-model" });
+		const statuses = new Map([
+			["status-footer", "TPS 12.3 · balance: 8 CNY"],
+			["preset", "preset:Vue"],
+		]);
+		const footer = new FooterComponent(session, createFooterData(1, statuses));
+		const lines = footer.render(120);
+		const stats = stripAnsi(lines[1]);
+
+		expect(lines).toHaveLength(2);
+		expect(stats).toContain("12.3%/200k (auto) • preset:Vue • TPS 12.3 · balance: 8 CNY");
+		expect(lines[1]).toContain(theme.fg("dim", "preset:Vue"));
+		expect(lines[1]).toContain(theme.fg("dim", "TPS 12.3 · balance: 8 CNY"));
+		expect(stats).toMatch(/current-model$/);
+	});
+
+	it("keeps the current model visible when extension statuses need truncation", () => {
+		const session = createSession({ sessionName: "", modelId: "current-model" });
+		const statuses = new Map([
+			["preset", "preset:A-very-long-project-preset"],
+			["status-footer", "TPS 123.4 · balance: 12,345.6789 CNY (refreshing…)"],
+		]);
+		const footer = new FooterComponent(session, createFooterData(1, statuses));
+
+		for (const width of [40, 80, 120]) {
+			const lines = footer.render(width);
+			expect(stripAnsi(lines[1])).toMatch(/current-model$/);
+			for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+		}
 	});
 });
