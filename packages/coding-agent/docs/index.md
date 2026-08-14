@@ -45,6 +45,7 @@ For the full first-run flow, see [Quickstart](quickstart.md).
 - [Security](security.md) - project trust, sandbox boundaries, and vulnerability reporting.
 - [Containerization](containerization.md) - sandbox pi with Gondolin, Docker, or OpenShell.
 - [Settings](settings.md) - global and project settings.
+- [Presets](presets.md) - switch named settings and resource sets per project.
 - [Keybindings](keybindings.md) - default shortcuts and custom keybindings.
 - [Sessions](sessions.md) - session management, branching, and tree navigation.
 - [Compaction](compaction.md) - context compaction and branch summarization.

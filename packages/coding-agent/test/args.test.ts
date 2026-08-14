@@ -95,6 +95,18 @@ describe("parseArgs", () => {
 			expect(result.model).toBe("gpt-4o");
 		});
 
+		test("parses --preset", () => {
+			const result = parseArgs(["--preset", "Vue"]);
+			expect(result.preset).toBe("Vue");
+		});
+
+		test("reports a missing --preset value", () => {
+			const result = parseArgs(["--preset", "--print"]);
+			expect(result.preset).toBeUndefined();
+			expect(result.diagnostics).toContainEqual({ type: "error", message: "--preset requires a value" });
+			expect(result.print).toBe(true);
+		});
+
 		test("parses --api-key", () => {
 			const result = parseArgs(["--api-key", "sk-test-key"]);
 			expect(result.apiKey).toBe("sk-test-key");

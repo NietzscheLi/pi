@@ -13,6 +13,7 @@ export type Mode = "text" | "json" | "rpc";
 export interface Args {
 	provider?: string;
 	model?: string;
+	preset?: string;
 	apiKey?: string;
 	systemPrompt?: string;
 	appendSystemPrompt?: string[];
@@ -91,6 +92,14 @@ export function parseArgs(args: string[]): Args {
 			result.provider = args[++i];
 		} else if (arg === "--model" && i + 1 < args.length) {
 			result.model = args[++i];
+		} else if (arg === "--preset") {
+			const preset = args[i + 1];
+			if (preset === undefined || preset.trim().length === 0 || preset.startsWith("-") || preset.startsWith("@")) {
+				result.diagnostics.push({ type: "error", message: "--preset requires a value" });
+			} else {
+				result.preset = preset;
+				i++;
+			}
 		} else if (arg === "--api-key" && i + 1 < args.length) {
 			result.apiKey = args[++i];
 		} else if (arg === "--system-prompt" && i + 1 < args.length) {
@@ -263,6 +272,7 @@ ${chalk.bold("Commands:")}
 ${chalk.bold("Options:")}
   --provider <name>              Provider name (default: google)
   --model <pattern>              Model pattern or ID (supports "provider/id" and optional ":<thinking>")
+  --preset <name>               Use a named resource/settings preset for this process
   --api-key <key>                API key (defaults to env vars)
   --system-prompt <text>         System prompt (default: coding assistant prompt)
   --append-system-prompt <text>  Append text or file contents to the system prompt (can be used multiple times)

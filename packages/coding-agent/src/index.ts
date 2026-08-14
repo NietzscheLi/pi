@@ -193,6 +193,25 @@ export type {
 	ResolvedResource,
 } from "./core/package-manager.ts";
 export { DefaultPackageManager } from "./core/package-manager.ts";
+export {
+	loadMcpRegistry,
+	loadPresetsConfig,
+	loadProjectPresetSelection,
+	MCP_REGISTRY_FILE_NAME,
+	type McpRegistry,
+	PRESETS_FILE_NAME,
+	PROJECT_PRESET_FILE_NAME,
+	type PresetLayer,
+	type PresetResourceRegistry,
+	type PresetResourceSelection,
+	type PresetsConfig,
+	type ProjectPresetSelection,
+	type ResolvedPreset,
+	type ResolvePresetOptions,
+	removeProjectPresetSelection,
+	resolvePreset,
+	writeProjectPresetSelection,
+} from "./core/preset-manager.ts";
 export type { ResourceCollision, ResourceDiagnostic, ResourceLoader } from "./core/resource-loader.ts";
 export { DefaultResourceLoader, loadProjectContextFiles } from "./core/resource-loader.ts";
 // SDK for programmatic usage

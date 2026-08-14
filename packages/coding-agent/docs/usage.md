@@ -41,6 +41,7 @@ Type `/` in the editor to open command completion. Extensions can register custo
 | `/model` | Switch models |
 | `/scoped-models` | Enable/disable models for Ctrl+P cycling |
 | `/settings` | Thinking level, theme, message delivery, transport |
+| [`/preset`](presets.md) | Show or switch the project's settings and resource preset |
 | `/resume` | Pick from previous sessions |
 | `/new` | Start a new session |
 | `/name <name>` | Set session display name |
@@ -228,6 +229,7 @@ Built-in tools: `read`, `bash`, `edit`, `write`, `grep`, `find`, `ls`.
 | `--theme <path>` | Load a theme; repeatable |
 | `--no-themes` | Disable theme discovery |
 | `--no-context-files`, `-nc` | Disable `AGENTS.md` and `CLAUDE.md` discovery |
+| `--preset <name>` | Use a named [preset](presets.md) for this process without changing the project selection |
 
 Combine `--no-*` with explicit flags to load exactly what you need, ignoring settings. Example:
 

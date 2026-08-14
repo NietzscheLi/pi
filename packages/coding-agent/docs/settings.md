@@ -1,6 +1,6 @@
 # Settings
 
-Pi uses JSON settings files with project settings overriding global settings.
+Pi uses JSON settings files with project settings overriding selected [preset](presets.md) settings, which override global settings.
 
 | Location | Scope |
 |----------|-------|
@@ -8,6 +8,8 @@ Pi uses JSON settings files with project settings overriding global settings.
 | `.pi/settings.json` | Project (current directory) |
 
 Edit directly or use `/settings` for common options.
+
+When presets are configured, the complete settings order is global, Base, named preset, project, then explicit CLI options. See [Presets](presets.md) for selection and resource behavior.
 
 ## Project Trust
 

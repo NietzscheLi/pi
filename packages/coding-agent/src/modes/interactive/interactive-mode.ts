@@ -1885,7 +1885,7 @@ export class InteractiveMode {
 					return this.handleResumeSession(sessionPath, options);
 				},
 				reload: async () => {
-					await this.handleReloadCommand();
+					await this.handleReloadCommand({ throwOnFailure: true });
 				},
 			},
 			shutdownHandler: () => {
@@ -5712,13 +5712,17 @@ export class InteractiveMode {
 	// Command handlers
 	// =========================================================================
 
-	private async handleReloadCommand(): Promise<void> {
+	private async handleReloadCommand(options: { throwOnFailure?: boolean } = {}): Promise<void> {
 		if (this.session.isStreaming) {
-			this.showWarning("Wait for the current response to finish before reloading.");
+			const message = "Wait for the current response to finish before reloading.";
+			this.showWarning(message);
+			if (options.throwOnFailure) throw new Error(message);
 			return;
 		}
 		if (this.session.isCompacting) {
-			this.showWarning("Wait for compaction to finish before reloading.");
+			const message = "Wait for compaction to finish before reloading.";
+			this.showWarning(message);
+			if (options.throwOnFailure) throw new Error(message);
 			return;
 		}
 
@@ -5799,6 +5803,7 @@ export class InteractiveMode {
 				dismissReloadBox(previousEditor as Component);
 			}
 			this.showError(`Reload failed: ${error instanceof Error ? error.message : String(error)}`);
+			if (options.throwOnFailure) throw error;
 		}
 	}
 

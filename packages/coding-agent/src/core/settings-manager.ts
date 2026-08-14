@@ -8,6 +8,7 @@ import lockfile from "proper-lockfile";
 import { CONFIG_DIR_NAME, getAgentDir } from "../config.ts";
 import { normalizePath, resolvePath } from "../utils/paths.ts";
 import { DEFAULT_HTTP_IDLE_TIMEOUT_MS, parseHttpIdleTimeoutMs } from "./http-dispatcher.ts";
+import { type ResolvedPreset, resolvePreset } from "./preset-manager.ts";
 
 export interface CompactionSettings {
 	enabled?: boolean; // default: true
@@ -182,6 +183,7 @@ export type SettingsScope = "global" | "project";
 
 export interface SettingsManagerCreateOptions {
 	projectTrusted?: boolean;
+	cliPreset?: string;
 }
 
 export interface SettingsStorage {
@@ -283,8 +285,14 @@ export class SettingsManager {
 	private storage: SettingsStorage;
 	private globalSettings: Settings;
 	private projectSettings: Settings;
+	private presetSettings: Settings;
+	private resolvedPreset: ResolvedPreset | undefined;
 	private settings: Settings;
 	private projectTrusted: boolean;
+	private cwd: string | undefined;
+	private agentDir: string | undefined;
+	private cliPreset: string | undefined;
+	private sessionOverrides: Partial<Settings> = {};
 	private modifiedFields = new Set<keyof Settings>(); // Track global fields modified during session
 	private modifiedNestedFields = new Map<keyof Settings, Set<string>>(); // Track global nested field modifications
 	private modifiedProjectFields = new Set<keyof Settings>(); // Track project fields modified during session
@@ -302,15 +310,23 @@ export class SettingsManager {
 		projectLoadError: Error | null = null,
 		initialErrors: SettingsError[] = [],
 		projectTrusted = true,
+		presetSettings: Settings = {},
+		resolvedPreset?: ResolvedPreset,
+		fileContext?: { cwd: string; agentDir: string; cliPreset?: string },
 	) {
 		this.storage = storage;
 		this.globalSettings = initialGlobal;
 		this.projectSettings = initialProject;
+		this.presetSettings = presetSettings;
+		this.resolvedPreset = resolvedPreset;
 		this.projectTrusted = projectTrusted;
+		this.cwd = fileContext?.cwd;
+		this.agentDir = fileContext?.agentDir;
+		this.cliPreset = fileContext?.cliPreset;
 		this.globalSettingsLoadError = globalLoadError;
 		this.projectSettingsLoadError = projectLoadError;
 		this.errors = [...initialErrors];
-		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+		this.settings = this.buildEffectiveSettings();
 	}
 
 	/** Create a SettingsManager that loads from files */
@@ -319,12 +335,28 @@ export class SettingsManager {
 		agentDir: string = getAgentDir(),
 		options: SettingsManagerCreateOptions = {},
 	): SettingsManager {
-		const storage = new FileSettingsStorage(cwd, agentDir);
-		return SettingsManager.fromStorage(storage, options);
+		const resolvedCwd = resolvePath(cwd);
+		const resolvedAgentDir = resolvePath(agentDir);
+		const storage = new FileSettingsStorage(resolvedCwd, resolvedAgentDir);
+		const resolvedPreset = resolvePreset({
+			cwd: resolvedCwd,
+			agentDir: resolvedAgentDir,
+			cliPreset: options.cliPreset,
+		});
+		return SettingsManager.fromStorage(storage, options, resolvedPreset, {
+			cwd: resolvedCwd,
+			agentDir: resolvedAgentDir,
+			cliPreset: options.cliPreset,
+		});
 	}
 
 	/** Create a SettingsManager from an arbitrary storage backend */
-	static fromStorage(storage: SettingsStorage, options: SettingsManagerCreateOptions = {}): SettingsManager {
+	static fromStorage(
+		storage: SettingsStorage,
+		options: SettingsManagerCreateOptions = {},
+		resolvedPreset?: ResolvedPreset,
+		fileContext?: { cwd: string; agentDir: string; cliPreset?: string },
+	): SettingsManager {
 		const projectTrusted = options.projectTrusted ?? true;
 		const globalLoad = SettingsManager.tryLoadFromStorage(storage, "global");
 		const projectLoad = SettingsManager.tryLoadFromStorage(storage, "project", projectTrusted);
@@ -344,7 +376,29 @@ export class SettingsManager {
 			projectLoad.error,
 			initialErrors,
 			projectTrusted,
+			resolvedPreset?.settings ?? {},
+			resolvedPreset,
+			fileContext,
 		);
+	}
+
+	private buildEffectiveSettings(): Settings {
+		const withPreset = deepMergeSettings(this.globalSettings, this.presetSettings);
+		const withProject = deepMergeSettings(withPreset, this.projectSettings);
+		return deepMergeSettings(withProject, this.sessionOverrides);
+	}
+
+	private reloadPreset(): void {
+		if (!this.cwd || !this.agentDir) return;
+		const resolvedPreset = resolvePreset({ cwd: this.cwd, agentDir: this.agentDir, cliPreset: this.cliPreset });
+		this.resolvedPreset = resolvedPreset;
+		this.presetSettings = resolvedPreset?.settings ?? {};
+	}
+
+	async validateReload(): Promise<void> {
+		await this.writeQueue;
+		if (!this.cwd || !this.agentDir) return;
+		resolvePreset({ cwd: this.cwd, agentDir: this.agentDir, cliPreset: this.cliPreset });
 	}
 
 	/** Create an in-memory SettingsManager (no file I/O) */
@@ -455,6 +509,14 @@ export class SettingsManager {
 		return structuredClone(this.projectSettings);
 	}
 
+	getPresetSettings(): Settings {
+		return structuredClone(this.presetSettings);
+	}
+
+	getResolvedPreset(): ResolvedPreset | undefined {
+		return this.resolvedPreset ? structuredClone(this.resolvedPreset) : undefined;
+	}
+
 	isProjectTrusted(): boolean {
 		return this.projectTrusted;
 	}
@@ -471,7 +533,7 @@ export class SettingsManager {
 		if (!trusted) {
 			this.projectSettings = {};
 			this.projectSettingsLoadError = null;
-			this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+			this.settings = this.buildEffectiveSettings();
 			return;
 		}
 
@@ -481,11 +543,12 @@ export class SettingsManager {
 		if (projectLoad.error) {
 			this.recordError("project", projectLoad.error);
 		}
-		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+		this.settings = this.buildEffectiveSettings();
 	}
 
 	async reload(): Promise<void> {
 		await this.writeQueue;
+		this.reloadPreset();
 		const globalLoad = SettingsManager.tryLoadFromStorage(this.storage, "global");
 		if (!globalLoad.error) {
 			this.globalSettings = globalLoad.settings;
@@ -509,12 +572,13 @@ export class SettingsManager {
 			this.recordError("project", projectLoad.error);
 		}
 
-		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+		this.settings = this.buildEffectiveSettings();
 	}
 
 	/** Apply additional overrides on top of current settings */
 	applyOverrides(overrides: Partial<Settings>): void {
-		this.settings = deepMergeSettings(this.settings, overrides);
+		this.sessionOverrides = deepMergeSettings(this.sessionOverrides, overrides);
+		this.settings = this.buildEffectiveSettings();
 	}
 
 	/** Mark a global field as modified during this session */
@@ -615,7 +679,7 @@ export class SettingsManager {
 	}
 
 	private save(): void {
-		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+		this.settings = this.buildEffectiveSettings();
 
 		if (this.globalSettingsLoadError) {
 			return;
@@ -633,7 +697,7 @@ export class SettingsManager {
 	private saveProjectSettings(settings: Settings): void {
 		this.assertProjectTrustedForWrite();
 		this.projectSettings = structuredClone(settings);
-		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+		this.settings = this.buildEffectiveSettings();
 
 		if (this.projectSettingsLoadError) {
 			return;
@@ -678,6 +742,10 @@ export class SettingsManager {
 	getSessionDir(): string | undefined {
 		const sessionDir = this.settings.sessionDir;
 		return sessionDir ? normalizePath(sessionDir) : sessionDir;
+	}
+
+	getHttpProxy(): string | undefined {
+		return this.settings.httpProxy;
 	}
 
 	getDefaultProvider(): string | undefined {
@@ -905,7 +973,7 @@ export class SettingsManager {
 	}
 
 	getDefaultProjectTrust(): DefaultProjectTrust {
-		const value = this.globalSettings.defaultProjectTrust;
+		const value = this.presetSettings.defaultProjectTrust ?? this.globalSettings.defaultProjectTrust;
 		return value === "always" || value === "never" ? value : "ask";
 	}
 

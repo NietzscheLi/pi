@@ -47,6 +47,7 @@ import { applyHttpProxySettings, configureHttpDispatcher } from "./core/http-dis
 import { resolveCliModel, resolveModelScope, type ScopedModel } from "./core/model-resolver.ts";
 import { ModelRuntime } from "./core/model-runtime.ts";
 import { restoreStdout, takeOverStdout } from "./core/output-guard.ts";
+import { loadPresetsConfig, loadProjectPresetSelection, writeProjectPresetSelection } from "./core/preset-manager.ts";
 import { type AppMode, resolveProjectTrusted } from "./core/project-trust.ts";
 import type { CreateAgentSessionOptions } from "./core/sdk.ts";
 import {
@@ -59,7 +60,7 @@ import { assertValidSessionId, SessionManager } from "./core/session-manager.ts"
 import { SettingsManager } from "./core/settings-manager.ts";
 import { printTimings, resetTimings, time } from "./core/timings.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/trust-manager.ts";
-import { builtInExtensions } from "./extensions/index.ts";
+import { builtInExtensions, createPresetExtension } from "./extensions/index.ts";
 import { runMigrations, showDeprecationWarnings } from "./migrations.ts";
 import { InteractiveMode, runPrintMode, runRpcMode } from "./modes/index.ts";
 import { initTheme, stopThemeWatcher } from "./modes/interactive/theme/theme.ts";
@@ -562,13 +563,45 @@ async function promptForMissingSessionCwd(
 	]);
 }
 
+async function selectInitialProjectPreset(options: {
+	appMode: AppMode;
+	parsed: Args;
+	cwd: string;
+	agentDir: string;
+}): Promise<boolean> {
+	const { appMode, parsed, cwd, agentDir } = options;
+	if (
+		appMode !== "interactive" ||
+		parsed.preset !== undefined ||
+		parsed.help ||
+		parsed.listModels !== undefined ||
+		!loadPresetsConfig(agentDir) ||
+		loadProjectPresetSelection(cwd)
+	) {
+		return true;
+	}
+
+	const config = loadPresetsConfig(agentDir);
+	if (!config) return true;
+	const selectorSettingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted: false });
+	const selected = await showStartupSelector<string | null>(
+		selectorSettingsManager,
+		"Select a preset for this project",
+		[{ label: "Base", value: null }, ...Object.keys(config.presets).map((name) => ({ label: name, value: name }))],
+	);
+	if (selected === undefined) return false;
+	writeProjectPresetSelection(cwd, selected);
+	return true;
+}
+
 export interface MainOptions {
 	extensionFactories?: InlineExtension[];
 }
 
 export async function main(args: string[], options?: MainOptions) {
 	resetTimings();
-	const extensionFactories = [...builtInExtensions, ...(options?.extensionFactories ?? [])];
+	const callerExtensionFactories = options?.extensionFactories ?? [];
+	let extensionFactories = [...builtInExtensions, ...callerExtensionFactories];
 	const offlineMode = args.includes("--offline") || isTruthyEnvFlag(process.env.PI_OFFLINE);
 	if (offlineMode) {
 		process.env.PI_OFFLINE = "1";
@@ -607,6 +640,7 @@ export async function main(args: string[], options?: MainOptions) {
 	}
 
 	const parsed = parseArgs(args);
+	extensionFactories = [...builtInExtensions, createPresetExtension(parsed.preset), ...callerExtensionFactories];
 	if (parsed.diagnostics.length > 0) {
 		for (const d of parsed.diagnostics) {
 			const color = d.type === "error" ? chalk.red : chalk.yellow;
@@ -655,7 +689,7 @@ export async function main(args: string[], options?: MainOptions) {
 	const { migratedAuthProviders: migratedProviders, deprecationWarnings } = runMigrations(cwd);
 	time("runMigrations");
 
-	const startupSettingsManager = SettingsManager.create(cwd, agentDir);
+	const startupSettingsManager = SettingsManager.create(cwd, agentDir, { cliPreset: parsed.preset });
 	reportDiagnostics(collectSettingsDiagnostics(startupSettingsManager, "startup session lookup"));
 
 	// Experimental first-time setup: theme choice and analytics opt-in.
@@ -703,8 +737,13 @@ export async function main(args: string[], options?: MainOptions) {
 	}
 	time("createSessionManager");
 
-	const trustStore = new ProjectTrustStore(agentDir);
 	const sessionCwd = sessionManager.getCwd();
+	if (!(await selectInitialProjectPreset({ appMode, parsed, cwd: sessionCwd, agentDir }))) {
+		process.exit(0);
+	}
+	time("selectInitialProjectPreset");
+
+	const trustStore = new ProjectTrustStore(agentDir);
 	const autoTrustOnReloadCwd =
 		parsed.projectTrustOverride === undefined && !hasTrustRequiringProjectResources(sessionCwd)
 			? sessionCwd
@@ -734,7 +773,10 @@ export async function main(args: string[], options?: MainOptions) {
 			: (cachedProjectTrust ??
 				parsed.projectTrustOverride ??
 				(!hasTrustRequiringResources || trustStore.get(cwd) === true));
-		const runtimeSettingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted });
+		const runtimeSettingsManager = SettingsManager.create(cwd, agentDir, {
+			projectTrusted,
+			cliPreset: parsed.preset,
+		});
 		const services = await createAgentSessionServices({
 			cwd,
 			agentDir,
@@ -748,14 +790,14 @@ export async function main(args: string[], options?: MainOptions) {
 								cwd,
 								trustStore,
 								trustOverride: parsed.projectTrustOverride,
-								defaultProjectTrust: startupSettingsManager.getDefaultProjectTrust(),
+								defaultProjectTrust: runtimeSettingsManager.getDefaultProjectTrust(),
 								extensionsResult,
 								projectTrustContext:
 									projectTrustContext ??
 									createProjectTrustContext({
 										cwd,
 										mode: isInitialRuntime ? trustPromptMode : appMode,
-										settingsManager: startupSettingsManager,
+										settingsManager: runtimeSettingsManager,
 										hasUI: isInitialRuntime && trustPromptMode === "interactive",
 									}),
 								onExtensionError: (message) => projectTrustDiagnostics.push({ type: "warning", message }),
@@ -852,7 +894,7 @@ export async function main(args: string[], options?: MainOptions) {
 	time("createAgentSessionRuntime");
 	const { services, session, modelFallbackMessage } = runtime;
 	const { settingsManager, modelRuntime, resourceLoader } = services;
-	applyHttpProxySettings(settingsManager.getGlobalSettings().httpProxy);
+	applyHttpProxySettings(settingsManager.getHttpProxy());
 	configureHttpDispatcher(settingsManager.getHttpIdleTimeoutMs());
 
 	if (parsed.help) {

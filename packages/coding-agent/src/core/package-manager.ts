@@ -171,14 +171,16 @@ interface ResourceAccumulator {
  * Precedence (highest to lowest):
  *   0  project + settings entry (source: "local", scope: "project")
  *   1  project + auto-discovered (source: "auto", scope: "project")
- *   2  user + settings entry (source: "local", scope: "user")
- *   3  user + auto-discovered (source: "auto", scope: "user")
- *   4  package resource (origin: "package")
+ *   2  selected preset entry (source: "preset", scope: "user")
+ *   3  user + settings entry (source: "local", scope: "user")
+ *   4  user + auto-discovered (source: "auto", scope: "user")
+ *   5  package resource (origin: "package")
  */
 function resourcePrecedenceRank(m: PathMetadata): number {
-	if (m.origin === "package") return 4;
-	const scopeBase = m.scope === "project" ? 0 : 2;
-	return scopeBase + (m.source === "local" ? 0 : 1);
+	if (m.origin === "package") return 5;
+	if (m.scope === "project") return m.source === "local" ? 0 : 1;
+	if (m.source === "preset") return 2;
+	return m.source === "local" ? 3 : 4;
 }
 
 interface PackageFilter {
@@ -885,12 +887,16 @@ export class DefaultPackageManager implements PackageManager {
 	async resolve(onMissing?: (source: string) => Promise<MissingSourceAction>): Promise<ResolvedPaths> {
 		const accumulator = this.createAccumulator();
 		const globalSettings = this.settingsManager.getGlobalSettings();
+		const presetSettings = this.settingsManager.getPresetSettings();
 		const projectSettings = this.settingsManager.getProjectSettings();
 
 		// Collect all packages with scope (project first so cwd resources win collisions)
 		const allPackages: Array<{ pkg: PackageSource; scope: SourceScope }> = [];
 		for (const pkg of projectSettings.packages ?? []) {
 			allPackages.push({ pkg, scope: "project" });
+		}
+		for (const pkg of presetSettings.packages ?? []) {
+			allPackages.push({ pkg, scope: "user" });
 		}
 		for (const pkg of globalSettings.packages ?? []) {
 			allPackages.push({ pkg, scope: "user" });
@@ -906,6 +912,7 @@ export class DefaultPackageManager implements PackageManager {
 		for (const resourceType of RESOURCE_TYPES) {
 			const target = this.getTargetMap(accumulator, resourceType);
 			const globalEntries = (globalSettings[resourceType] ?? []) as string[];
+			const presetEntries = (presetSettings[resourceType] ?? []) as string[];
 			const projectEntries = (projectSettings[resourceType] ?? []) as string[];
 			this.resolveLocalEntries(
 				projectEntries,
@@ -917,6 +924,17 @@ export class DefaultPackageManager implements PackageManager {
 					origin: "top-level",
 				},
 				projectBaseDir,
+			);
+			this.resolveLocalEntries(
+				presetEntries,
+				resourceType,
+				target,
+				{
+					source: "preset",
+					scope: "user",
+					origin: "top-level",
+				},
+				globalBaseDir,
 			);
 			this.resolveLocalEntries(
 				globalEntries,
