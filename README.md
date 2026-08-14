@@ -10,34 +10,49 @@
 
 > New issues and PRs from new contributors are auto-closed by default. Maintainers review auto-closed issues daily. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-# Pi Agent Harness
+# Pi monorepo
 
-This is the home of the Pi agent harness project including our self extensible coding agent.
+Pi is a minimal, extensible coding-agent harness and the TypeScript libraries that power it. This repository contains the terminal agent, a provider-neutral LLM API, the agent runtime, terminal UI components, and experimental remote-session packages.
 
-* **[@earendil-works/pi-coding-agent](packages/coding-agent)**: Interactive coding agent CLI
-* **[@earendil-works/pi-agent-core](packages/agent)**: Agent runtime with tool calling and state management
-* **[@earendil-works/pi-ai](packages/ai)**: Unified multi-provider LLM API (OpenAI, Anthropic, Google, …)
+Pi is designed to be adapted through [extensions](packages/coding-agent/docs/extensions.md), [skills](packages/coding-agent/docs/skills.md), [prompt templates](packages/coding-agent/docs/prompt-templates.md), [themes](packages/coding-agent/docs/themes.md), and [Pi packages](packages/coding-agent/docs/packages.md), rather than by forking the core.
+
+## Use the coding agent
+
+Install the CLI from npm:
+
+```bash
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent
+pi
+```
+
+Authenticate with an API key or run `/login` inside Pi to use a supported subscription. See the [coding-agent README](packages/coding-agent/README.md) for provider setup, CLI modes, customization, and platform notes.
+
+## Packages
+
+| Package | Description |
+|---------|-------------|
+| **[@earendil-works/pi-coding-agent](packages/coding-agent)** | Interactive coding-agent CLI with sessions, tools, extensions, skills, and SDK/RPC modes |
+| **[@earendil-works/pi-agent-core](packages/agent)** | General-purpose agent runtime with transport abstraction, state management, and attachments |
+| **[@earendil-works/pi-ai](packages/ai)** | Unified LLM API with automatic model discovery and provider configuration |
+| **[@earendil-works/pi-tui](packages/tui)** | Terminal UI library with differential rendering |
+| **[@earendil-works/pi-telemetry](packages/telemetry)** | Vendor-neutral telemetry contracts and typed schema utilities |
+| **[@earendil-works/pi-protocol](packages/protocol)** | Experimental runtime-neutral CBOR protocol for remote Pi sessions |
+| **[@earendil-works/pi-client](packages/client)** | Transport-neutral client for remote Pi sessions over framed CBOR |
+| **[@earendil-works/pi-server](packages/server)** | Server core and Unix transport for remote Pi sessions |
+| **[@earendil-works/pi-session-backend-sqlite-node](packages/session-backends/sqlite-node)** | Node SQLite session backend for agent-core sessions |
+| **[@earendil-works/pi-evals](packages/evals)** | Evaluation tools for coding-agent workflows |
+
+The remote-session packages are experimental. Read their package READMEs for protocol, transport, and service integration details.
 
 To learn more about Pi:
 
 * [Visit pi.dev](https://pi.dev), the project website with demos
-* [Read the documentation](https://pi.dev/docs/latest), but you can also ask the agent to explain itself
-
-## All Packages
-
-| Package | Description |
-|---------|-------------|
-| **[@earendil-works/pi-telemetry](packages/telemetry)** | Vendor-neutral telemetry contracts, reference adapter, conformance tests, and typed schemas |
-| **[@earendil-works/pi-ai](packages/ai)** | Unified multi-provider LLM API (OpenAI, Anthropic, Google, etc.) |
-| **[@earendil-works/pi-agent-core](packages/agent)** | Agent runtime with tool calling and state management |
-| **[@earendil-works/pi-coding-agent](packages/coding-agent)** | Interactive coding agent CLI |
-| **[@earendil-works/pi-tui](packages/tui)** | Terminal UI library with differential rendering |
-
-For Slack/chat automation and workflows see [earendil-works/pi-chat](https://github.com/earendil-works/pi-chat).
+* [Read the documentation](https://pi.dev/docs/latest)
+* [Read the coding-agent documentation](packages/coding-agent/docs/index.md)
 
 ## Permissions & Containerization
 
-Pi does not include a built-in permission system for restricting filesystem, process, network, or credential access. By default, it runs with the permissions of the user and process that launched it.
+Pi does not include a built-in permission system for restricting filesystem, process, network, or credential access. By default, it runs with the permissions of the user and process that launched it. Treat model-generated commands and tool calls as having the same access as Pi itself.
 
 If you need stronger boundaries, containerize or sandbox Pi. See [packages/coding-agent/docs/containerization.md](packages/coding-agent/docs/containerization.md) for three patterns:
 
@@ -47,17 +62,17 @@ If you need stronger boundaries, containerize or sandbox Pi. See [packages/codin
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and [AGENTS.md](AGENTS.md) for project-specific rules (for both humans and agents).  Longer term plans for Pi can also be found in [RFCs](https://rfc.earendil.com/keyword/pi/).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and [AGENTS.md](AGENTS.md) for project-specific rules. Package APIs and behavior are documented in each package's README and in the [coding-agent documentation](packages/coding-agent/docs/index.md). Longer-term plans for Pi can be found in [RFCs](https://rfc.earendil.com/keyword/pi/).
 
 ## Development
 
 ```bash
-npm install --ignore-scripts  # Install all dependencies without running lifecycle scripts
-npm run build         # Refresh model data, then build all packages
-npm run build:offline # Rebuild using existing model data without network access
-npm run check         # Lint, format, and type check
-./test.sh            # Run tests (skips LLM-dependent tests without API keys)
-./pi-test.sh         # Run pi from sources (can be run from any directory)
+npm install --ignore-scripts  # Install dependencies without lifecycle scripts
+npm run build                # Build all packages and refresh model data
+npm run build:offline        # Build with the existing model data
+npm run check                # Format, lint, and type check
+./test.sh                    # Run the non-e2e test suite
+./pi-test.sh                 # Run the coding agent from source
 ```
 
 ## Building standalone binaries from release source
