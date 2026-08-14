@@ -1,12 +1,16 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { describe, expect, it, vi } from "vitest";
-import planModeExtension from "../examples/extensions/plan-mode/index.ts";
 import type { ExtensionAPI, ExtensionContext } from "../src/core/extensions/index.ts";
+import planModeExtension from "../src/extensions/plan-mode/index.ts";
 
 type CommandHandler = (args: string, ctx: ExtensionContext) => Promise<void> | void;
 type AgentEndHandler = (
 	event: { type: "agent_end"; messages: AgentMessage[] },
+	ctx: ExtensionContext,
+) => Promise<void> | void;
+type TurnEndHandler = (
+	event: { type: "turn_end"; message: AgentMessage; turnIndex: number; toolResults: AgentMessage[] },
 	ctx: ExtensionContext,
 ) => Promise<void> | void;
 
@@ -34,6 +38,7 @@ function setup(options: { activeTools?: string[]; selectChoice?: string; editorT
 	let activeTools = options.activeTools ?? ["read", "bash", "edit", "write"];
 	const commands = new Map<string, CommandHandler>();
 	let agentEndHandler: AgentEndHandler | undefined;
+	let turnEndHandler: TurnEndHandler | undefined;
 
 	const sendMessage = vi.fn<ExtensionAPI["sendMessage"]>();
 	const sendUserMessage = vi.fn<ExtensionAPI["sendUserMessage"]>();
@@ -50,6 +55,7 @@ function setup(options: { activeTools?: string[]; selectChoice?: string; editorT
 		registerShortcut: vi.fn(),
 		on(event: string, handler: unknown) {
 			if (event === "agent_end") agentEndHandler = handler as AgentEndHandler;
+			if (event === "turn_end") turnEndHandler = handler as TurnEndHandler;
 		},
 		getFlag: vi.fn(() => false),
 		getActiveTools: vi.fn(() => [...activeTools]),
@@ -90,6 +96,14 @@ function setup(options: { activeTools?: string[]; selectChoice?: string; editorT
 		await agentEndHandler({ type: "agent_end", messages: [createAssistantMessage(text)] }, ctx);
 	}
 
+	async function triggerTurnEnd(text: string): Promise<void> {
+		if (!turnEndHandler) throw new Error("Missing turn_end handler");
+		await turnEndHandler(
+			{ type: "turn_end", message: createAssistantMessage(text), turnIndex: 0, toolResults: [] },
+			ctx,
+		);
+	}
+
 	return {
 		activeTools: () => activeTools,
 		appendEntry,
@@ -99,10 +113,11 @@ function setup(options: { activeTools?: string[]; selectChoice?: string; editorT
 		sendUserMessage,
 		setActiveTools,
 		triggerAgentEnd,
+		triggerTurnEnd,
 	};
 }
 
-describe("plan-mode example extension", () => {
+describe("built-in plan-mode extension", () => {
 	it("preserves custom active tools while toggling plan mode", async () => {
 		const { activeTools, runCommand, setActiveTools } = setup({
 			activeTools: ["read", "bash", "edit", "write", "echo_tool"],
@@ -149,8 +164,8 @@ describe("plan-mode example extension", () => {
 		expect(sendUserMessage).toHaveBeenCalledWith("Add a regression test.", { deliverAs: "followUp" });
 	});
 
-	it("queues plan execution as a follow-up custom message", async () => {
-		const { activeTools, runCommand, sendMessage, triggerAgentEnd } = setup({
+	it("executes and completes plan steps one agent run at a time", async () => {
+		const { activeTools, appendEntry, runCommand, sendMessage, triggerAgentEnd, triggerTurnEnd } = setup({
 			activeTools: ["read", "bash", "edit", "write", "echo_tool"],
 			selectChoice: "Execute the plan (track progress)",
 		});
@@ -159,9 +174,35 @@ describe("plan-mode example extension", () => {
 		await triggerAgentEnd("Plan:\n1. Inspect the current implementation\n2. Add a regression test");
 
 		expect(activeTools()).toEqual(["read", "bash", "edit", "write", "echo_tool"]);
-		expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ customType: "plan-mode-execute" }), {
-			triggerTurn: true,
-			deliverAs: "followUp",
-		});
+		expect(sendMessage).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				customType: "plan-mode-execute",
+				content: expect.stringContaining("Execute only this step"),
+			}),
+			{ triggerTurn: true, deliverAs: "followUp" },
+		);
+		expect(sendMessage.mock.lastCall?.[0]).toEqual(
+			expect.objectContaining({ content: expect.not.stringContaining("Add a regression test") }),
+		);
+
+		await triggerTurnEnd("The implementation is understood. [DONE:1]");
+		expect(appendEntry).toHaveBeenLastCalledWith(
+			"plan-mode",
+			expect.objectContaining({
+				todos: [
+					expect.objectContaining({ step: 1, completed: true }),
+					expect.objectContaining({ step: 2, completed: false }),
+				],
+			}),
+		);
+
+		await triggerAgentEnd("The implementation is understood. [DONE:1]");
+		expect(sendMessage).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				customType: "plan-mode-execute",
+				content: expect.stringContaining("2. A regression test"),
+			}),
+			{ triggerTurn: true, deliverAs: "followUp" },
+		);
 	});
 });

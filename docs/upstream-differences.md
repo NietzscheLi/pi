@@ -1,3 +1,5 @@
+/
+
 # 本地改动与上游同步指南
 
 本文记录本仓库相对原始 pi 仓库的长期本地功能，供后续拉取上游更新、处理冲突和回归验证时使用。本文只记录代码契约与配置结构，不记录本机密钥、访问令牌、用户 ID 或余额。
@@ -6,11 +8,11 @@
 
 记录日期：2026-08-14（Asia/Shanghai）。
 
-| 引用 | 提交 | 说明 |
-| --- | --- | --- |
-| `origin/main` | `9d2ec7ffabe927bfad2214c1cee25b6632a78dcf` | 原始仓库 `https://github.com/earendil-works/pi.git` |
-| `target/main` | `9d2ec7ffabe927bfad2214c1cee25b6632a78dcf` | 当前与 `origin/main` 相同的一次性快照 |
-| 本地 `HEAD` | `cbd1ef0dc39f4adfa1fc102e547f48881aa6addf` | 命名预设提交，不含本文记录的未提交工作树改动 |
+| 引用            | 提交                                         | 说明                                                 |
+| --------------- | -------------------------------------------- | ---------------------------------------------------- |
+| `origin/main` | `9d2ec7ffabe927bfad2214c1cee25b6632a78dcf` | 原始仓库`https://github.com/earendil-works/pi.git` |
+| `target/main` | `9d2ec7ffabe927bfad2214c1cee25b6632a78dcf` | 当前与`origin/main` 相同的一次性快照               |
+| 本地`HEAD`    | `cbd1ef0dc39f4adfa1fc102e547f48881aa6addf` | 命名预设提交，不含本文记录的未提交工作树改动         |
 
 `target/main` 当前没有对应的 `remote.target` 配置，不能认为它会自动更新。它最初由 `https://github.com/NietzscheLi/pi.git` 直接 fetch 得到。比较原始 pi 时以 `origin/main` 为权威；使用 `target/main` 前必须先确认来源和提交 SHA。
 
@@ -30,10 +32,46 @@ git diff --stat origin/main...HEAD
 
 本地功能分成两个独立变更组。同步上游时也应保持这个顺序重放，避免把 preset、余额和 TUI 冲突混成一个整文件选择。
 
-| 变更组 | 当前状态 | 用户可见行为 |
-| --- | --- | --- |
-| 命名预设 | 已提交：`cbd1ef0` | `--preset`、`/preset`、项目预设持久化、资源组合与切换回滚 |
-| 供应商余额与模型选择 | 当前工作树 | 两级模型选择、供应商余额、TPS/余额 footer、统一原生 footer 布局 |
+| 变更组               | 当前状态            | 用户可见行为                                                    |
+| -------------------- | ------------------- | --------------------------------------------------------------- |
+| 命名预设             | 已提交：`cbd1ef0` | `--preset`、`/preset`、项目预设持久化、资源组合与切换回滚   |
+| 供应商余额与模型选择 | 当前工作树          | 两级模型选择、供应商余额、TPS/余额 footer、统一原生 footer 布局 |
+| Plan mode 顺序执行   | 当前工作树          | 每个 agent run 只执行一个计划步骤，逐项更新并持久化完成状态     |
+
+## Plan mode 顺序执行
+
+### 问题与行为契约
+
+旧实现把所有剩余步骤一次性交给模型。模型通常在最终回复才统一输出全部 `[DONE:n]`，导致任务列表在整个计划结束时才一次性变为 completed。
+
+当前实现必须保持以下行为：
+
+- 每个 agent run 只接收并执行当前一个步骤，不能提前开始后续步骤。
+- 当前步骤完成后，assistant 回复包含对应的 `[DONE:n]`。
+- `turn_end` 收到标记后立即更新 footer、todo widget，并通过 `appendEntry("plan-mode", ...)` 持久化状态。
+- 当前 run 的 `agent_end` 只在当前步骤确实 completed 后排队启动下一步骤。
+- 持久化 `executingStep`，恢复 session 时重新扫描当前计划执行标记之后的 assistant 消息，并从首个未完成步骤继续。
+- 所有步骤完成后才清空执行状态并显示 `plan-complete` 消息。
+
+### 关键文件
+
+| 文件                                                              | 本地职责                                           | 合并注意点                                                       |
+| ----------------------------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------- |
+| `packages/coding-agent/src/extensions/plan-mode/index.ts`       | 内置 plan mode 的逐项调度、状态刷新和 session 恢复 | 保留`turn_end` 即时持久化与 `agent_end` 下一项调度的职责分离 |
+| `packages/coding-agent/examples/extensions/plan-mode/index.ts`  | 面向扩展作者的同步参考实现                         | 行为应与内置实现保持一致                                         |
+| `packages/coding-agent/test/plan-mode-extension.test.ts`        | 验证首个提示不泄露后续步骤、逐项完成和下一项调度   | 修改执行生命周期时必须运行                                       |
+| `packages/coding-agent/examples/extensions/plan-mode/README.md` | 记录顺序执行和逐项进度行为                         | 与实现保持同步                                                   |
+
+### 回归验证
+
+```bash
+cd packages/coding-agent
+node "$(git rev-parse --show-toplevel)/node_modules/vitest/dist/cli.js" --run \
+  test/plan-mode-extension.test.ts \
+  test/built-in-plan-mode.test.ts
+cd ../..
+npm run check
+```
 
 ## 命名预设
 
@@ -57,16 +95,16 @@ MCP 注册表只定义服务器和选中的 ID，不提供 MCP 客户端实现�
 
 ### 关键文件
 
-| 文件 | 本地职责 | 合并注意点 |
-| --- | --- | --- |
-| `packages/coding-agent/src/core/preset-manager.ts` | 配置校验、层合并、项目选择读写、MCP 权限检查 | 新增文件，保留严格校验和原子写入 |
-| `packages/coding-agent/src/core/settings-manager.ts` | 将 Base/命名预设插入设置优先级 | 上游若调整设置层，重新推导优先级，不能直接选 ours |
-| `packages/coding-agent/src/core/package-manager.ts` | preset 资源来源与冲突排序 | 保留上述资源优先级契约 |
-| `packages/coding-agent/src/extensions/preset.ts` | `/preset`、预检、reload 与失败回滚、footer 状态 | 与扩展 reload 生命周期一起审查 |
-| `packages/coding-agent/src/main.ts` | 启动时解析预设、项目 cwd 和首次选择 | 上游启动顺序变化时风险最高 |
-| `packages/coding-agent/src/cli/args.ts` | `--preset` 参数 | 同步参数解析和帮助文本测试 |
-| `packages/coding-agent/src/modes/interactive/interactive-mode.ts` | 首次交互选择与 reload 错误回传 | 不覆盖上游新增 TUI 生命周期逻辑 |
-| `packages/coding-agent/src/core/agent-session.ts` | reload 前校验入口 | 改动小但属于回滚契约 |
+| 文件                                                                | 本地职责                                          | 合并注意点                                        |
+| ------------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------- |
+| `packages/coding-agent/src/core/preset-manager.ts`                | 配置校验、层合并、项目选择读写、MCP 权限检查      | 新增文件，保留严格校验和原子写入                  |
+| `packages/coding-agent/src/core/settings-manager.ts`              | 将 Base/命名预设插入设置优先级                    | 上游若调整设置层，重新推导优先级，不能直接选 ours |
+| `packages/coding-agent/src/core/package-manager.ts`               | preset 资源来源与冲突排序                         | 保留上述资源优先级契约                            |
+| `packages/coding-agent/src/extensions/preset.ts`                  | `/preset`、预检、reload 与失败回滚、footer 状态 | 与扩展 reload 生命周期一起审查                    |
+| `packages/coding-agent/src/main.ts`                               | 启动时解析预设、项目 cwd 和首次选择               | 上游启动顺序变化时风险最高                        |
+| `packages/coding-agent/src/cli/args.ts`                           | `--preset` 参数                                 | 同步参数解析和帮助文本测试                        |
+| `packages/coding-agent/src/modes/interactive/interactive-mode.ts` | 首次交互选择与 reload 错误回传                    | 不覆盖上游新增 TUI 生命周期逻辑                   |
+| `packages/coding-agent/src/core/agent-session.ts`                 | reload 前校验入口                                 | 改动小但属于回滚契约                              |
 
 详细使用说明继续维护在 `packages/coding-agent/docs/presets.md`。
 
@@ -127,13 +165,13 @@ footer 仍保持两行：第一行 cwd/branch/session，第二行左侧统计和
 
 ### 关键文件
 
-| 文件 | 本地职责 | 合并注意点 |
-| --- | --- | --- |
-| `packages/coding-agent/src/core/provider-balance.ts` | 余额协议、运行时凭据输入、缓存、去重、订阅和格式化 | 新增文件，保持唯一实现 |
-| `packages/coding-agent/src/extensions/status-footer.ts` | TPS、定时余额、命令和 status 发布 | 新增文件，检查 extension event/context 变化 |
-| `packages/coding-agent/src/extensions/index.ts` | 注册 preset 和 status-footer 两个隐藏内置扩展 | 两个本地功能共享冲突点 |
-| `packages/coding-agent/src/modes/interactive/components/model-selector.ts` | 两级状态机、搜索、scope、目录刷新、余额展示 | 接近整体改写，是上游同步热点 |
-| `packages/coding-agent/src/modes/interactive/components/footer.ts` | 将扩展状态并入原生统计行并保证左右布局 | 保留上游新增统计项和宽度逻辑 |
+| 文件                                                                         | 本地职责                                           | 合并注意点                                  |
+| ---------------------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------- |
+| `packages/coding-agent/src/core/provider-balance.ts`                       | 余额协议、运行时凭据输入、缓存、去重、订阅和格式化 | 新增文件，保持唯一实现                      |
+| `packages/coding-agent/src/extensions/status-footer.ts`                    | TPS、定时余额、命令和 status 发布                  | 新增文件，检查 extension event/context 变化 |
+| `packages/coding-agent/src/extensions/index.ts`                            | 注册 preset 和 status-footer 两个隐藏内置扩展      | 两个本地功能共享冲突点                      |
+| `packages/coding-agent/src/modes/interactive/components/model-selector.ts` | 两级状态机、搜索、scope、目录刷新、余额展示        | 接近整体改写，是上游同步热点                |
+| `packages/coding-agent/src/modes/interactive/components/footer.ts`         | 将扩展状态并入原生统计行并保证左右布局             | 保留上游新增统计项和宽度逻辑                |
 
 ## 上游同步流程
 
@@ -219,6 +257,7 @@ pi --version
 
 - 本文基线日期与三个 SHA。
 - 本地功能提交列表和新增/删除文件。
+- Plan mode 的逐项执行、完成标记、持久化和恢复契约。
 - 外部配置结构，但不写真实值。
 - 冲突热点和回归测试命令。
 - 构建、安装及实际 TUI 验证结果。

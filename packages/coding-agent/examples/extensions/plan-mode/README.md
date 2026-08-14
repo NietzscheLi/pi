@@ -9,7 +9,8 @@ Pi now includes this workflow as a built-in extension. Use `/plan` or `pi --plan
 - **Built-in write tools disabled**: Disables edit/write while preserving other active tools
 - **Bash allowlist**: Only read-only bash commands are allowed
 - **Plan extraction**: Extracts numbered steps from `Plan:` sections
-- **Progress tracking**: Widget shows completion status during execution
+- **Progress tracking**: Widget updates after each completed step during execution
+- **Sequential execution**: Each agent run executes one step before the next is queued
 - **[DONE:n] markers**: Explicit step completion tracking
 - **Session persistence**: State survives session resume
 

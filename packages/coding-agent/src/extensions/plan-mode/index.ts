@@ -13,6 +13,7 @@ interface PlanModeState {
 	enabled: boolean;
 	todos?: TodoItem[];
 	executing?: boolean;
+	executingStep?: number;
 	toolsBeforePlanMode?: string[];
 }
 
@@ -31,6 +32,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	let planModeEnabled = false;
 	let executionMode = false;
 	let todoItems: TodoItem[] = [];
+	let executingStep: number | undefined;
 	let toolsBeforePlanMode: string[] | undefined;
 
 	pi.registerFlag("plan", {
@@ -97,14 +99,31 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			enabled: planModeEnabled,
 			todos: todoItems,
 			executing: executionMode,
+			executingStep,
 			toolsBeforePlanMode,
 		});
+	}
+
+	function getExecutionTodo(): TodoItem | undefined {
+		const active = todoItems.find((todo) => todo.step === executingStep);
+		return active && !active.completed ? active : todoItems.find((todo) => !todo.completed);
+	}
+
+	function executionPrompt(todo: TodoItem): string {
+		return `Execute plan step ${todo.step} of ${todoItems.length}.
+
+Current step:
+${todo.step}. ${todo.text}
+
+Execute only this step. Do not begin any later step.
+After completing it, include [DONE:${todo.step}] in your response and stop.`;
 	}
 
 	function togglePlanMode(ctx: ExtensionContext): void {
 		planModeEnabled = !planModeEnabled;
 		executionMode = false;
 		todoItems = [];
+		executingStep = undefined;
 
 		if (planModeEnabled) {
 			enablePlanModeTools();
@@ -205,18 +224,12 @@ Do not attempt to make changes. Describe what you would do.`,
 		}
 
 		if (executionMode && todoItems.length > 0) {
-			const remaining = todoItems.filter((todo) => !todo.completed);
-			const todoList = remaining.map((todo) => `${todo.step}. ${todo.text}`).join("\n");
+			const todo = getExecutionTodo();
+			if (!todo) return;
 			return {
 				message: {
 					customType: "plan-execution-context",
-					content: `[EXECUTING PLAN - Full tool access enabled]
-
-Remaining steps:
-${todoList}
-
-Execute each step in order.
-After completing a step, include a [DONE:n] tag in your response.`,
+					content: `[EXECUTING PLAN - Full tool access enabled]\n\n${executionPrompt(todo)}`,
 					display: false,
 				},
 			};
@@ -244,9 +257,23 @@ After completing a step, include a [DONE:n] tag in your response.`,
 				);
 				executionMode = false;
 				todoItems = [];
+				executingStep = undefined;
 				updateStatus(ctx);
 				persistState();
+				return;
 			}
+
+			const finishedTodo = todoItems.find((todo) => todo.step === executingStep);
+			if (!finishedTodo?.completed) return;
+
+			const nextTodo = todoItems.find((todo) => !todo.completed);
+			if (!nextTodo) return;
+			executingStep = nextTodo.step;
+			persistState();
+			pi.sendMessage(
+				{ customType: "plan-mode-execute", content: executionPrompt(nextTodo), display: true },
+				{ triggerTurn: true, deliverAs: "followUp" },
+			);
 			return;
 		}
 
@@ -282,21 +309,14 @@ After completing a step, include a [DONE:n] tag in your response.`,
 
 			planModeEnabled = false;
 			executionMode = true;
+			executingStep = firstTodoItem.step;
 			restoreNormalModeTools();
 			updateStatus(ctx);
 			persistState();
 
-			const remainingList = todoItems.map((todo) => `${todo.step}. ${todo.text}`).join("\n");
-			const execMessage = `Execute the plan.
-
-Remaining steps:
-${remainingList}
-
-Start with: ${firstTodoItem.text}
-After completing a step, include a [DONE:n] tag in your response.`;
 			pi.sendMessage(planTodoListMessage, { deliverAs: "followUp" });
 			pi.sendMessage(
-				{ customType: "plan-mode-execute", content: execMessage, display: true },
+				{ customType: "plan-mode-execute", content: executionPrompt(firstTodoItem), display: true },
 				{ triggerTurn: true, deliverAs: "followUp" },
 			);
 		} else if (choice === "Refine the plan") {
@@ -325,6 +345,7 @@ After completing a step, include a [DONE:n] tag in your response.`;
 			planModeEnabled = planModeEntry.data.enabled ?? planModeEnabled;
 			todoItems = planModeEntry.data.todos ?? todoItems;
 			executionMode = planModeEntry.data.executing ?? executionMode;
+			executingStep = planModeEntry.data.executingStep ?? executingStep;
 			toolsBeforePlanMode = planModeEntry.data.toolsBeforePlanMode ?? toolsBeforePlanMode;
 		}
 
@@ -346,6 +367,10 @@ After completing a step, include a [DONE:n] tag in your response.`;
 				}
 			}
 			markCompletedSteps(messages.map(getTextContent).join("\n"), todoItems);
+		}
+
+		if (executionMode) {
+			executingStep = getExecutionTodo()?.step;
 		}
 
 		if (planModeEnabled) {
