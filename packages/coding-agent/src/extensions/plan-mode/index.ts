@@ -54,9 +54,9 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		if (executionMode && todoItems.length > 0) {
 			const lines = todoItems.map((item) => {
 				if (item.completed) {
-					return ctx.ui.theme.fg("muted", `[x] ${ctx.ui.theme.strikethrough(item.text)}`);
+					return ctx.ui.theme.fg("muted", `${item.step}. [x] ${ctx.ui.theme.strikethrough(item.text)}`);
 				}
-				return `${ctx.ui.theme.fg("muted", "[ ] ")}${item.text}`;
+				return `${item.step}. ${ctx.ui.theme.fg("muted", "[ ] ")}${item.text}`;
 			});
 			ctx.ui.setWidget("plan-todos", lines);
 		} else {
@@ -110,12 +110,12 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	}
 
 	function executionPrompt(todo: TodoItem): string {
-		return `Execute plan step ${todo.step} of ${todoItems.length}.
+		return `Execute plan task ID ${todo.step}.
 
-Current step:
+Current task:
 ${todo.step}. ${todo.text}
 
-Execute only this step. Do not begin any later step.
+Execute only this step. Do not begin any later step, even if it appears convenient or related.
 After completing it, include [DONE:${todo.step}] in your response and stop.`;
 	}
 
@@ -149,7 +149,7 @@ After completing it, include [DONE:${todo.step}] in your response and stop.`;
 				return;
 			}
 			const list = todoItems
-				.map((item, index) => `${index + 1}. ${item.completed ? "[x]" : "[ ]"} ${item.text}`)
+				.map((item) => `${item.step}. ${item.completed ? "[x]" : "[ ]"} ${item.text}`)
 				.join("\n");
 			ctx.ui.notify(`Plan Progress:\n${list}`, "info");
 		},
@@ -210,7 +210,8 @@ Restrictions:
 
 Ask clarifying questions using an available question tool when needed.
 
-Create a detailed numbered plan under a "Plan:" header:
+Create a detailed numbered plan under a "Plan:" header.
+Each task number is its stable ID and must be unique. Task IDs may be out of order and do not need to be contiguous.
 
 Plan:
 1. First step description
@@ -241,9 +242,8 @@ Do not attempt to make changes. Describe what you would do.`,
 		if (!isAssistantMessage(event.message)) return;
 
 		const text = getTextContent(event.message);
-		if (markCompletedSteps(text, todoItems) > 0) {
-			updateStatus(ctx);
-		}
+		const completedTasks = markCompletedSteps(text, todoItems);
+		if (completedTasks > 0) updateStatus(ctx);
 		persistState();
 	});
 
@@ -290,7 +290,7 @@ Do not attempt to make changes. Describe what you would do.`,
 		if (todoItems.length === 0) return;
 		persistState();
 
-		const todoListText = todoItems.map((todo, index) => `${index + 1}. [ ] ${todo.text}`).join("\n");
+		const todoListText = todoItems.map((todo) => `${todo.step}. [ ] ${todo.text}`).join("\n");
 		const planTodoListMessage = {
 			customType: "plan-todo-list",
 			content: `**Plan Steps (${todoItems.length}):**\n\n${todoListText}`,

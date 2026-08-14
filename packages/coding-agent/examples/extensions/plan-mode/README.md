@@ -10,8 +10,9 @@ Pi now includes this workflow as a built-in extension. Use `/plan` or `pi --plan
 - **Bash allowlist**: Only read-only bash commands are allowed
 - **Plan extraction**: Extracts numbered steps from `Plan:` sections
 - **Progress tracking**: Widget updates after each completed step during execution
-- **Sequential execution**: Each agent run executes one step before the next is queued
-- **[DONE:n] markers**: Explicit step completion tracking
+- **Task-by-task execution**: Each agent run executes one listed task before the next is queued
+- **Stable task IDs**: Task IDs may be unordered but must be unique
+- **[DONE:n] markers**: Completion maps to task ID `n` and updates progress immediately
 - **Session persistence**: State survives session resume
 
 ## Commands
@@ -47,9 +48,9 @@ Plan:
 
 ### Execution Mode
 - Full tool access restored
-- Agent executes steps in order
-- `[DONE:n]` markers track completion
-- Widget shows progress
+- Agent executes tasks in their listed order, regardless of numeric task ID order
+- `[DONE:n]` marks the task whose stable ID is `n`
+- Widget updates immediately when the current task is marked complete
 
 ### Command Allowlist
 

@@ -9,8 +9,9 @@ const BALANCE_CONFIG_TEMPLATE = `# Provider balance query configuration.
 # Add entries under providers whose names exactly match configured provider IDs.
 refreshIntervalMinutes: 5
 
+# Anchor each protocol profile and reference it directly from providers.
 profiles:
-  newapi:
+  newapi: &newapi
     request:
       url: "{{baseUrl}}/api/user/self"
       method: GET
@@ -26,7 +27,7 @@ profiles:
       errorPath: message
       errorFallback: Balance query failed
 
-  sub2api:
+  sub2api: &sub2api
     request:
       url: "{{baseUrl}}/v1/usage"
       method: GET
@@ -41,7 +42,7 @@ profiles:
         fallback: true
       errorFallback: Balance query failed
 
-  deepseek-official:
+  deepseek-official: &deepseek-official
     request:
       baseUrl: https://api.deepseek.com
       url: "{{baseUrl}}/user/balance"
@@ -60,9 +61,9 @@ profiles:
 
 providers:
   # DeepSeek:
-  #   profile: deepseek-official
+  #   profile: *deepseek-official
   # Example-NewAPI:
-  #   profile: newapi
+  #   profile: *newapi
   #   request:
   #     baseUrl: https://api.example.com
   #   credentials:
@@ -76,13 +77,25 @@ providers:
 const PRESETS_CONFIG_TEMPLATE = `# Named settings and resource presets.
 # Resource paths are resolved relative to the agent directory.
 version: 1
+# Anchor resource IDs in their registries, then use aliases in preset enable/disable lists.
 resources:
-  skills: {}
-  extensions: {}
-  packages: {}
+  # skills:
+  #   &skill-example example: ./preset-resources/skills/example
+  # mcp:
+  #   - &mcp-example example
+  # extensions:
+  #   &extension-example example: ./preset-runtime/example.ts
+  # packages:
+  #   &package-example example: npm:@example/pi-package@1.0.0
 base:
   settings: {}
-presets: {}
+presets:
+  # Example:
+  #   enable:
+  #     skills: [*skill-example]
+  #     mcp: [*mcp-example]
+  #     extensions: [*extension-example]
+  #     packages: [*package-example]
 `;
 
 function writeIfMissing(path: string, content: string): void {

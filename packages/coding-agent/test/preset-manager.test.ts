@@ -59,6 +59,36 @@ describe("preset manager", () => {
 		);
 	}
 
+	it("resolves resource ID anchors in preset selections", () => {
+		const sharedSkill = createResource("shared-skill");
+		writeMcpRegistry();
+		writeFileSync(
+			join(agentDir, "presets.yml"),
+			`version: 1
+resources:
+  skills:
+    &skill-shared shared: ${sharedSkill}
+  mcp:
+    - &mcp-memory memory
+  packages:
+    &package-lsp lsp: npm:@example/lsp@1.0.0
+presets:
+  Vue:
+    enable:
+      skills: [*skill-shared]
+      mcp: [*mcp-memory]
+      packages: [*package-lsp]
+`,
+		);
+
+		const resolved = resolvePreset({ cwd: projectDir, agentDir, cliPreset: "Vue" });
+		expect(resolved?.settings).toMatchObject({
+			skills: [sharedSkill],
+			packages: ["npm:@example/lsp@1.0.0"],
+		});
+		expect(resolved?.mcpServerIds).toEqual(["memory"]);
+	});
+
 	it("resolves CLI, project, default, and Base selections in priority order", () => {
 		const baseSkill = createResource("base-skill");
 		const vueSkill = createResource("vue-skill");

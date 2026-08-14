@@ -25,6 +25,7 @@ export interface PresetLayer {
 
 export interface PresetResourceRegistry {
 	skills?: Record<string, string>;
+	mcp?: string[];
 	extensions?: Record<string, string>;
 	packages?: Record<string, PackageSource>;
 }
@@ -72,7 +73,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function readPresetYamlFile(path: string): unknown {
 	try {
-		return parse(readFileSync(path, "utf-8"));
+		return parse(readFileSync(path, "utf-8"), { merge: true });
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		throw new Error(`Failed to read preset configuration ${path}: ${message}`);
@@ -150,6 +151,14 @@ function validateStringRegistry(value: unknown, field: string): Record<string, s
 	return value as Record<string, string>;
 }
 
+function validateMcpResourceIds(value: unknown): string[] {
+	assertStringArray(value, "resources.mcp");
+	if (new Set(value).size !== value.length) {
+		throw new Error("Invalid preset configuration: resources.mcp must not contain duplicate IDs");
+	}
+	return value;
+}
+
 function validatePackageRegistry(value: unknown): Record<string, PackageSource> | undefined {
 	if (value === undefined) return undefined;
 	if (!isRecord(value)) {
@@ -216,7 +225,7 @@ export function loadPresetsConfig(agentDir: string): PresetsConfig | undefined {
 	const resources = raw.resources as Record<string, unknown> | undefined;
 	if (resources) {
 		for (const key of Object.keys(resources)) {
-			if (key !== "skills" && key !== "extensions" && key !== "packages") {
+			if (key !== "skills" && key !== "mcp" && key !== "extensions" && key !== "packages") {
 				throw new Error(`Invalid preset configuration ${path}: unknown resources field ${key}`);
 			}
 		}
@@ -232,6 +241,7 @@ export function loadPresetsConfig(agentDir: string): PresetsConfig | undefined {
 		...(raw.defaultPreset ? { defaultPreset: raw.defaultPreset } : {}),
 		resources: {
 			skills: validateStringRegistry(resources?.skills, "resources.skills"),
+			mcp: resources?.mcp === undefined ? undefined : validateMcpResourceIds(resources.mcp),
 			extensions: validateStringRegistry(resources?.extensions, "resources.extensions"),
 			packages: validatePackageRegistry(resources?.packages),
 		},
@@ -257,6 +267,9 @@ export function loadPresetsConfig(agentDir: string): PresetsConfig | undefined {
 			}
 		}
 		for (const id of [...(layer.enable?.mcp ?? []), ...(layer.disable?.mcp ?? [])]) {
+			if (config.resources?.mcp && !config.resources.mcp.includes(id)) {
+				throw new Error(`Invalid preset configuration ${path}: ${name} references unknown mcp resource ${id}`);
+			}
 			referencedMcpServers.add(id);
 		}
 	}

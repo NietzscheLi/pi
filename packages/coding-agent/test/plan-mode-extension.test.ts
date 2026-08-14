@@ -164,14 +164,16 @@ describe("built-in plan-mode extension", () => {
 		expect(sendUserMessage).toHaveBeenCalledWith("Add a regression test.", { deliverAs: "followUp" });
 	});
 
-	it("executes and completes plan steps one agent run at a time", async () => {
-		const { activeTools, appendEntry, runCommand, sendMessage, triggerAgentEnd, triggerTurnEnd } = setup({
+	it("maps unordered task IDs to immediate completion updates", async () => {
+		const { activeTools, appendEntry, ctx, runCommand, sendMessage, triggerAgentEnd, triggerTurnEnd } = setup({
 			activeTools: ["read", "bash", "edit", "write", "echo_tool"],
 			selectChoice: "Execute the plan (track progress)",
 		});
 
 		await runCommand("plan");
-		await triggerAgentEnd("Plan:\n1. Inspect the current implementation\n2. Add a regression test");
+		await triggerAgentEnd(
+			"Plan:\n5. Inspect the current implementation\n2. Add a regression test\n9. Verify the result",
+		);
 
 		expect(activeTools()).toEqual(["read", "bash", "edit", "write", "echo_tool"]);
 		expect(sendMessage).toHaveBeenLastCalledWith(
@@ -182,25 +184,44 @@ describe("built-in plan-mode extension", () => {
 			{ triggerTurn: true, deliverAs: "followUp" },
 		);
 		expect(sendMessage.mock.lastCall?.[0]).toEqual(
-			expect.objectContaining({ content: expect.not.stringContaining("Add a regression test") }),
+			expect.objectContaining({
+				content: expect.stringContaining("task ID 5"),
+			}),
 		);
 
-		await triggerTurnEnd("The implementation is understood. [DONE:1]");
+		await triggerTurnEnd("Task 2 is complete. [DONE:2]");
 		expect(appendEntry).toHaveBeenLastCalledWith(
 			"plan-mode",
 			expect.objectContaining({
 				todos: [
-					expect.objectContaining({ step: 1, completed: true }),
-					expect.objectContaining({ step: 2, completed: false }),
+					expect.objectContaining({ step: 5, completed: false }),
+					expect.objectContaining({ step: 2, completed: true }),
+					expect.objectContaining({ step: 9, completed: false }),
 				],
 			}),
 		);
 
-		await triggerAgentEnd("The implementation is understood. [DONE:1]");
+		await triggerTurnEnd("The current task is complete. [DONE:5]");
+		expect(ctx.ui.setWidget).toHaveBeenLastCalledWith(
+			"plan-todos",
+			expect.arrayContaining([expect.stringContaining("5. [x] Inspect the current implementation")]),
+		);
+		expect(appendEntry).toHaveBeenLastCalledWith(
+			"plan-mode",
+			expect.objectContaining({
+				todos: [
+					expect.objectContaining({ step: 5, completed: true }),
+					expect.objectContaining({ step: 2, completed: true }),
+					expect.objectContaining({ step: 9, completed: false }),
+				],
+			}),
+		);
+
+		await triggerAgentEnd("The current task is complete. [DONE:5]");
 		expect(sendMessage).toHaveBeenLastCalledWith(
 			expect.objectContaining({
 				customType: "plan-mode-execute",
-				content: expect.stringContaining("2. A regression test"),
+				content: expect.stringContaining("task ID 9"),
 			}),
 			{ triggerTurn: true, deliverAs: "followUp" },
 		);

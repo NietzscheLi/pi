@@ -126,8 +126,11 @@ export function extractTodoItems(message: string): TodoItem[] {
 
 	const planSection = message.slice(message.indexOf(headerMatch[0]) + headerMatch[0].length);
 	const numberedPattern = /^\s*(\d+)[.)]\s+\*{0,2}([^*\n]+)/gm;
-
+	const seenSteps = new Set<number>();
 	for (const match of planSection.matchAll(numberedPattern)) {
+		const step = Number(match[1]);
+		if (!Number.isSafeInteger(step) || step <= 0 || seenSteps.has(step)) return [];
+
 		const text = match[2]
 			.trim()
 			.replace(/\*{1,2}$/, "")
@@ -135,7 +138,8 @@ export function extractTodoItems(message: string): TodoItem[] {
 		if (text.length > 5 && !text.startsWith("`") && !text.startsWith("/") && !text.startsWith("-")) {
 			const cleaned = cleanStepText(text);
 			if (cleaned.length > 3) {
-				items.push({ step: items.length + 1, text: cleaned, completed: false });
+				seenSteps.add(step);
+				items.push({ step, text: cleaned, completed: false });
 			}
 		}
 	}
@@ -152,10 +156,13 @@ export function extractDoneSteps(message: string): number[] {
 }
 
 export function markCompletedSteps(text: string, items: TodoItem[]): number {
-	const doneSteps = extractDoneSteps(text);
-	for (const step of doneSteps) {
+	let completed = 0;
+	for (const step of extractDoneSteps(text)) {
 		const item = items.find((candidate) => candidate.step === step);
-		if (item) item.completed = true;
+		if (item && !item.completed) {
+			item.completed = true;
+			completed++;
+		}
 	}
-	return doneSteps.length;
+	return completed;
 }

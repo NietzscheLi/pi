@@ -36,9 +36,9 @@ git diff --stat origin/main...HEAD
 | -------------------- | ------------------- | --------------------------------------------------------------- |
 | 命名预设             | 已提交：`cbd1ef0` | `--preset`、`/preset`、项目预设持久化、资源组合与切换回滚   |
 | 供应商余额与模型选择 | 当前工作树          | 两级模型选择、供应商余额、TPS/余额 footer、统一原生 footer 布局 |
-| Plan mode 顺序执行   | 当前工作树          | 每个 agent run 只执行一个计划步骤，逐项更新并持久化完成状态     |
+| Plan mode 逐项执行   | 已提交：`baa271b` | 每个 agent run 只执行一个任务，按 task ID 逐项更新并持久化状态  |
 
-## Plan mode 顺序执行
+## Plan mode 逐项执行
 
 ### 问题与行为契约
 
@@ -46,12 +46,13 @@ git diff --stat origin/main...HEAD
 
 当前实现必须保持以下行为：
 
-- 每个 agent run 只接收并执行当前一个步骤，不能提前开始后续步骤。
-- 当前步骤完成后，assistant 回复包含对应的 `[DONE:n]`。
-- `turn_end` 收到标记后立即更新 footer、todo widget，并通过 `appendEntry("plan-mode", ...)` 持久化状态。
-- 当前 run 的 `agent_end` 只在当前步骤确实 completed 后排队启动下一步骤。
-- 持久化 `executingStep`，恢复 session 时重新扫描当前计划执行标记之后的 assistant 消息，并从首个未完成步骤继续。
-- 所有步骤完成后才清空执行状态并显示 `plan-complete` 消息。
+- 每个 agent run 只接收并执行当前一个任务，当前任务完成后才按列表排列调度下一项。
+- 模型给出的数字是稳定 task ID，可以乱序且不要求连续，但必须唯一；重复 ID 的计划不能执行。
+- 当前任务完成后，assistant 回复包含对应 task ID 的 `[DONE:n]`。
+- 实时执行接受任意已知 task ID 的完成标记，并只标识 ID 对应的任务；未知 ID 不改变列表。
+- `turn_end` 收到有效标记后立即更新 footer、todo widget，并通过 `appendEntry("plan-mode", ...)` 持久化状态。
+- 持久化 `executingStep`，恢复 session 时重新扫描当前计划执行标记之后的 assistant 消息，并从首个未完成任务继续。
+- 所有任务完成后才清空执行状态并显示 `plan-complete` 消息。
 
 ### 关键文件
 
@@ -59,7 +60,7 @@ git diff --stat origin/main...HEAD
 | ----------------------------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------- |
 | `packages/coding-agent/src/extensions/plan-mode/index.ts`       | 内置 plan mode 的逐项调度、状态刷新和 session 恢复 | 保留`turn_end` 即时持久化与 `agent_end` 下一项调度的职责分离 |
 | `packages/coding-agent/examples/extensions/plan-mode/index.ts`  | 面向扩展作者的同步参考实现                         | 行为应与内置实现保持一致                                         |
-| `packages/coding-agent/test/plan-mode-extension.test.ts`        | 验证首个提示不泄露后续步骤、逐项完成和下一项调度   | 修改执行生命周期时必须运行                                       |
+| `packages/coding-agent/test/plan-mode-extension.test.ts`        | 验证乱序 task ID、完成映射、即时更新和下一项调度   | 修改执行生命周期时必须运行                                       |
 | `packages/coding-agent/examples/extensions/plan-mode/README.md` | 记录顺序执行和逐项进度行为                         | 与实现保持同步                                                   |
 
 ### 回归验证
@@ -257,7 +258,7 @@ pi --version
 
 - 本文基线日期与三个 SHA。
 - 本地功能提交列表和新增/删除文件。
-- Plan mode 的逐项执行、完成标记、持久化和恢复契约。
+- Plan mode 的稳定 task ID、逐项执行、完成标记、持久化和恢复契约。
 - 外部配置结构，但不写真实值。
 - 冲突热点和回归测试命令。
 - 构建、安装及实际 TUI 验证结果。

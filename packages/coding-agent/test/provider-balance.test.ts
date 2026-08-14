@@ -9,7 +9,7 @@ function writeBalanceFiles(agentDir: string): void {
 		join(agentDir, "balance-config.yaml"),
 		`refreshIntervalMinutes: 5
 profiles:
-  basic:
+  basic: &basic
     request:
       url: "{{baseUrl}}/balance"
       headers:
@@ -21,7 +21,7 @@ profiles:
       errorPath: message
 providers:
   test.0:
-    profile: basic
+    profile: *basic
     request:
       baseUrl: https://balance.example.test
     extractor:

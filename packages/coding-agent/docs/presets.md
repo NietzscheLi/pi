@@ -44,33 +44,39 @@ While `--preset` is active, `/preset` can update the saved project selection, bu
 version: 1
 resources:
   skills:
-    vue: ./preset-resources/skills/vue
+    &skill-vue vue: ./preset-resources/skills/vue
+  mcp:
+    - &mcp-context7 context7
   extensions:
-    mcp-web: ./preset-runtime/web.ts
+    &extension-mcp-web mcp-web: ./preset-runtime/web.ts
   packages:
-    lsp: npm:@example/pi-lsp@1.0.0
+    &package-lsp lsp: npm:@example/pi-lsp@1.0.0
 base:
   settings:
     theme: dark
 presets:
   Vue:
     enable:
-      skills: [vue]
-      extensions: [mcp-web]
-      packages: [lsp]
-      mcp: [context7]
+      skills: [*skill-vue]
+      mcp: [*mcp-context7]
+      extensions: [*extension-mcp-web]
+      packages: [*package-lsp]
     settings:
       defaultThinkingLevel: medium
 ```
 
-Every named resource must exist in the matching registry. `disable` accepts the same keys as `enable` and removes inherited Base resources:
+Every named skill, extension, and package must exist in its matching registry. Put anchors directly on resource IDs, as shown above, so aliases in `enable` and `disable` resolve to the registry key rather than its path or package source. The optional `resources.mcp` list provides the same anchored-ID pattern for MCP servers; their definitions remain in `mcp-registry.json`.
+
+Anchors must be declared before their aliases. Pi also resolves YAML merge keys, but resource selections should use direct aliases because each list item is a resource ID.
+
+`disable` accepts the same keys as `enable` and removes inherited Base resources:
 
 ```yaml
 presets:
   Minimal:
     disable:
-      skills: [vue]
-      packages: [lsp]
+      skills: [*skill-vue]
+      packages: [*package-lsp]
 ```
 
 Settings are merged in this order, from lowest to highest precedence:

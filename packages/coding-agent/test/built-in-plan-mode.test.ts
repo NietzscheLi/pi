@@ -52,4 +52,12 @@ describe("built-in plan mode", () => {
 		expect(markCompletedSteps("[DONE:2]", todos)).toBe(1);
 		expect(todos[1]?.completed).toBe(true);
 	});
+
+	it("preserves unordered task IDs and rejects duplicate IDs", () => {
+		expect(extractTodoItems("Plan:\n5. Prepare the release\n2. Build the package")).toEqual([
+			{ step: 5, text: "Prepare the release", completed: false },
+			{ step: 2, text: "Build the package", completed: false },
+		]);
+		expect(extractTodoItems("Plan:\n2. Prepare the release\n2. Build the package")).toEqual([]);
+	});
 });

@@ -191,6 +191,14 @@ Plan:
 		const items = extractTodoItems(message);
 		expect(items).toHaveLength(1);
 	});
+
+	it("preserves unordered task IDs and rejects duplicate IDs", () => {
+		expect(extractTodoItems("Plan:\n5. Prepare the release\n2. Build the package")).toEqual([
+			{ step: 5, text: "Prepare the release", completed: false },
+			{ step: 2, text: "Build the package", completed: false },
+		]);
+		expect(extractTodoItems("Plan:\n2. Prepare the release\n2. Build the package")).toEqual([]);
+	});
 });
 
 describe("extractDoneSteps", () => {
@@ -248,14 +256,14 @@ describe("markCompletedSteps", () => {
 
 		const count = markCompletedSteps("[DONE:99]", items);
 
-		expect(count).toBe(1); // Still counts the marker found
-		expect(items[0].completed).toBe(false); // But doesn't mark anything
+		expect(count).toBe(0);
+		expect(items[0].completed).toBe(false);
 	});
 
 	it("doesn't double-complete already completed items", () => {
 		const items: TodoItem[] = [{ step: 1, text: "First", completed: true }];
 
-		markCompletedSteps("[DONE:1]", items);
+		expect(markCompletedSteps("[DONE:1]", items)).toBe(0);
 		expect(items[0].completed).toBe(true);
 	});
 });

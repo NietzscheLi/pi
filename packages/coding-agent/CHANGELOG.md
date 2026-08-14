@@ -13,6 +13,7 @@
 - Added named presets for settings, packages, extensions, skills, and external MCP adapters, selectable per process with `--preset` or per project with `/preset`.
 - Added shared provider-balance queries for the interactive model selector and footer, including cached refreshes and `/update-balance`.
 - Added first-run initialization of missing `balance-config.yaml` and `presets.yml` user configuration templates without overwriting existing files.
+- Added YAML profile aliases to provider-balance configuration and anchored resource IDs to preset configuration.
 
 ### Changed
 
@@ -24,7 +25,7 @@
 
 ### Fixed
 
-- Fixed plan execution marking every task complete only after the full plan finished instead of updating and persisting progress after each task.
+- Fixed plan execution marking every task complete only after the full plan finished; tasks now keep unique model-provided IDs, and matching `[DONE:n]` markers update and persist progress immediately.
 - Fixed managed-tool downloads delaying TUI startup and hiding diagnostics in fullscreen mode by mounting the TUI first and showing download progress and warnings inside it.
 - Fixed opening a model selector immediately after startup cancelling and restarting the in-progress model catalog refresh.
 - Fixed inherited GitHub Copilot login triggering API rate limits while enabling model policies by limiting concurrent policy updates ([#6187](https://github.com/earendil-works/pi/issues/6187)).

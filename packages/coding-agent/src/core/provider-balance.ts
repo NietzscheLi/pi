@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { parse } from "yaml";
 import { getAgentDir } from "../config.ts";
-import { parseFrontmatter } from "../utils/frontmatter.ts";
 import { BALANCE_CONFIG_FILE_NAME } from "./default-config.ts";
 
 type JsonObject = Record<string, unknown>;
@@ -75,7 +75,11 @@ function numberValue(value: unknown): number | null {
 }
 
 function readYaml(path: string): JsonObject {
-	return parseFrontmatter<JsonObject>(`---\n${readFileSync(path, "utf8")}\n---`).frontmatter;
+	const value: unknown = parse(readFileSync(path, "utf8"), { merge: true });
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		throw new Error(`Balance configuration ${path} must contain an object`);
+	}
+	return value as JsonObject;
 }
 
 function interpolate(value: string, variables: Record<string, string>): string {
@@ -222,8 +226,15 @@ export class ProviderBalanceService implements ProviderBalanceReader {
 		if (!provider) throw new Error(`Balance is not configured for ${providerName}`);
 
 		const profileName = typeof provider.profile === "string" ? provider.profile : undefined;
-		const profile = profileName ? objectValue(objectAt(config, "profiles"), profileName) : undefined;
+		const profile = profileName
+			? objectValue(objectAt(config, "profiles"), profileName)
+			: provider.profile === undefined
+				? undefined
+				: objectAt(provider, "profile");
 		if (profileName && !profile) throw new Error(`Unknown balance profile: ${profileName}`);
+		if (provider.profile !== undefined && !profile) {
+			throw new Error(`Invalid balance profile for ${providerName}`);
+		}
 		const request = mergeConfig(objectAt(profile, "request"), objectAt(provider, "request") ?? {});
 		const extractor = mergeConfig(objectAt(profile, "extractor"), objectAt(provider, "extractor") ?? {});
 		const credentials = { ...(objectAt(profile, "credentials") ?? {}), ...(objectAt(provider, "credentials") ?? {}) };
