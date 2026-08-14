@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getAgentDir } from "../config.ts";
 import { parseFrontmatter } from "../utils/frontmatter.ts";
+import { BALANCE_CONFIG_FILE_NAME } from "./default-config.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -204,7 +205,7 @@ export class ProviderBalanceService implements ProviderBalanceReader {
 	}
 
 	private get balanceConfigPath(): string {
-		return join(this.resolvedAgentDir, "balance-config.yaml");
+		return join(this.resolvedAgentDir, BALANCE_CONFIG_FILE_NAME);
 	}
 
 	private publish(providerName: string, state: ProviderBalanceState): void {

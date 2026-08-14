@@ -2,6 +2,8 @@
 
 Read-only exploration mode for safe code analysis.
 
+Pi now includes this workflow as a built-in extension. Use `/plan` or `pi --plan` without loading this example. This directory remains as reference source for extension authors.
+
 ## Features
 
 - **Built-in write tools disabled**: Disables edit/write while preserving other active tools

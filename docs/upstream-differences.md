@@ -49,7 +49,7 @@ git diff --stat origin/main...HEAD
 
 ### 外部配置
 
-- `~/.pi/agent/presets.json`：预设库。
+- `~/.pi/agent/presets.yml`：预设库。
 - `~/.pi/agent/mcp-registry.json`：私有 MCP 定义；POSIX 权限必须精确为 `0600`。
 - `<project>/.pi/preset.json`：项目选择，只保存预设名或 `Base`。
 

@@ -575,14 +575,13 @@ async function selectInitialProjectPreset(options: {
 		parsed.preset !== undefined ||
 		parsed.help ||
 		parsed.listModels !== undefined ||
-		!loadPresetsConfig(agentDir) ||
 		loadProjectPresetSelection(cwd)
 	) {
 		return true;
 	}
 
 	const config = loadPresetsConfig(agentDir);
-	if (!config) return true;
+	if (!config || Object.keys(config.presets).length === 0) return true;
 	const selectorSettingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted: false });
 	const selected = await showStartupSelector<string | null>(
 		selectorSettingsManager,

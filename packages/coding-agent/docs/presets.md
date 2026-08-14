@@ -6,7 +6,7 @@ Presets switch a named set of settings, skills, extensions, packages, and MCP se
 
 | Location | Purpose |
 |----------|---------|
-| `~/.pi/agent/presets.json` | User preset library and resource registry |
+| `~/.pi/agent/presets.yml` | User preset library and resource registry |
 | `~/.pi/agent/mcp-registry.json` | Private MCP server definitions; mode `0600` on POSIX |
 | `.pi/preset.json` | Project selection written by Pi |
 
@@ -14,7 +14,7 @@ Pi treats `Base` as a built-in selection. It applies the `base` layer without a 
 
 ## Selecting a Preset
 
-When `presets.json` exists and a project has no selection, interactive startup asks for one and writes `.pi/preset.json`. Use these commands later:
+When `presets.yml` exists and defines named presets, and a project has no selection, interactive startup asks for one and writes `.pi/preset.json`. Use these commands later:
 
 ```text
 /preset              # choose and persist a project preset
@@ -33,61 +33,44 @@ The selection order is:
 
 1. `--preset <name>`
 2. `.pi/preset.json`
-3. `defaultPreset` in `presets.json`
+3. `defaultPreset` in `presets.yml`
 4. `Base`
 
 While `--preset` is active, `/preset` can update the saved project selection, but the CLI selection remains active until the process exits.
 
 ## Configuration
 
-```json
-{
-  "version": 1,
-  "resources": {
-    "skills": {
-      "vue": "./preset-resources/skills/vue"
-    },
-    "extensions": {
-      "mcp-web": "./preset-runtime/web.ts"
-    },
-    "packages": {
-      "lsp": "npm:@example/pi-lsp@1.0.0"
-    }
-  },
-  "base": {
-    "settings": {
-      "theme": "dark"
-    }
-  },
-  "presets": {
-    "Vue": {
-      "enable": {
-        "skills": ["vue"],
-        "extensions": ["mcp-web"],
-        "packages": ["lsp"],
-        "mcp": ["context7"]
-      },
-      "settings": {
-        "defaultThinkingLevel": "medium"
-      }
-    }
-  }
-}
+```yaml
+version: 1
+resources:
+  skills:
+    vue: ./preset-resources/skills/vue
+  extensions:
+    mcp-web: ./preset-runtime/web.ts
+  packages:
+    lsp: npm:@example/pi-lsp@1.0.0
+base:
+  settings:
+    theme: dark
+presets:
+  Vue:
+    enable:
+      skills: [vue]
+      extensions: [mcp-web]
+      packages: [lsp]
+      mcp: [context7]
+    settings:
+      defaultThinkingLevel: medium
 ```
 
 Every named resource must exist in the matching registry. `disable` accepts the same keys as `enable` and removes inherited Base resources:
 
-```json
-{
-  "presets": {
-    "Minimal": {
-      "disable": {
-        "skills": ["vue"],
-        "packages": ["lsp"]
-      }
-    }
-  }
-}
+```yaml
+presets:
+  Minimal:
+    disable:
+      skills: [vue]
+      packages: [lsp]
 ```
 
 Settings are merged in this order, from lowest to highest precedence:

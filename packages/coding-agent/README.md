@@ -14,7 +14,7 @@
 
 Pi is a minimal terminal coding harness. Adapt pi to your workflows, not the other way around, without having to fork and modify pi internals. Extend it with TypeScript [Extensions](#extensions), [Skills](#skills), [Prompt Templates](#prompt-templates), and [Themes](#themes). Put your extensions, skills, prompt templates, and themes in [Pi Packages](#pi-packages) and share them with others via npm or git.
 
-Pi ships with powerful defaults but skips features like sub agents and plan mode. Instead, you can ask pi to build what you want or install a third party pi package that matches your workflow.
+Pi ships with powerful defaults, including an optional built-in plan mode, but skips features such as sub-agents. You can ask pi to build other workflows or install a third-party pi package that matches your needs.
 
 Pi runs in four modes: interactive, print or JSON, RPC for process integration, and an SDK for embedding in your own apps.
 
@@ -179,6 +179,8 @@ Type `/` in the editor to trigger commands. [Extensions](#extensions) can regist
 | `/login`, `/logout` | Manage provider credentials |
 | [`/llama`](docs/llama-cpp.md) | Download, load, and unload llama.cpp router models |
 | `/model` | Switch models |
+| `/plan` | Toggle read-only plan mode |
+| `/todos` | Show plan execution progress |
 | `/scoped-models` | Enable/disable models for Ctrl+P cycling |
 | `/settings` | Thinking level, theme, message delivery, transport |
 | `/resume` | Pick from previous sessions |
@@ -384,7 +386,7 @@ The default export can also be `async`. pi waits for async extension factories b
 
 **What's possible:**
 - Custom tools (or replace built-in tools entirely)
-- Sub-agents and plan mode
+- Sub-agents and custom workflows
 - Custom compaction and summarization
 - Permission gates and path protection
 - Custom editors and UI components
@@ -501,7 +503,7 @@ Pi is aggressively extensible so it doesn't have to dictate your workflow. Featu
 
 **No permission popups.** Run in a container, or build your own confirmation flow with [extensions](#extensions) inline with your environment and security requirements.
 
-**No plan mode.** Write plans to files, or build it with [extensions](#extensions), or install a package.
+**Optional plan mode.** Use `/plan` or start with `pi --plan` for read-only exploration. The built-in extension disables `edit` and `write`, restricts `bash` to read-only commands, extracts numbered plans, and can track execution progress.
 
 **No built-in to-dos.** They confuse models. Use a TODO.md file, or build your own with [extensions](#extensions).
 
@@ -610,6 +612,7 @@ Combine `--no-*` with explicit flags to load exactly what you need, ignoring set
 | `--append-system-prompt <text>` | Append to system prompt |
 | `--tui-mode <mode>` | TUI mode: `regular` (default) or experimental `fullscreen` |
 | `--use-theme <name[/name]>` | Set the initial interactive theme for this run without changing settings |
+| `--plan` | Start in read-only plan mode |
 | `--verbose` | Force verbose startup |
 | `-a`, `--approve` | Trust project-local files for this run |
 | `-na`, `--no-approve` | Ignore project-local files for this run |

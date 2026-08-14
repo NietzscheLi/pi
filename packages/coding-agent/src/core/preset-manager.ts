@@ -1,11 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import lockfile from "proper-lockfile";
+import { parse } from "yaml";
 import { CONFIG_DIR_NAME } from "../config.ts";
 import { resolvePath } from "../utils/paths.ts";
 import type { PackageSource, Settings } from "./settings-manager.ts";
 
-export const PRESETS_FILE_NAME = "presets.json";
+export const PRESETS_FILE_NAME = "presets.yml";
 export const MCP_REGISTRY_FILE_NAME = "mcp-registry.json";
 export const PROJECT_PRESET_FILE_NAME = "preset.json";
 
@@ -69,12 +70,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function readPresetYamlFile(path: string): unknown {
+	try {
+		return parse(readFileSync(path, "utf-8"));
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		throw new Error(`Failed to read preset configuration ${path}: ${message}`);
+	}
+}
+
 function readJsonFile(path: string): unknown {
 	try {
 		return JSON.parse(readFileSync(path, "utf-8"));
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
-		throw new Error(`Failed to read preset configuration ${path}: ${message}`);
+		throw new Error(`Failed to read preset MCP registry ${path}: ${message}`);
 	}
 }
 
@@ -191,7 +201,7 @@ function validateMcpServer(name: string, definition: Record<string, unknown>, pa
 export function loadPresetsConfig(agentDir: string): PresetsConfig | undefined {
 	const path = join(resolvePath(agentDir), PRESETS_FILE_NAME);
 	if (!existsSync(path)) return undefined;
-	const raw = readJsonFile(path);
+	const raw = readPresetYamlFile(path);
 	if (!isRecord(raw) || raw.version !== 1 || !isRecord(raw.presets)) {
 		throw new Error(`Invalid preset configuration ${path}: expected version 1 with a presets object`);
 	}

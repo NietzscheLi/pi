@@ -39,6 +39,8 @@ Type `/` in the editor to open command completion. Extensions can register custo
 | `/login`, `/logout` | Manage OAuth or API-key credentials |
 | [`/llama`](llama-cpp.md) | Download, load, and unload llama.cpp router models |
 | `/model` | Switch models |
+| `/plan` | Toggle read-only plan mode |
+| `/todos` | Show plan execution progress |
 | `/scoped-models` | Enable/disable models for Ctrl+P cycling |
 | `/settings` | Thinking level, theme, message delivery, transport |
 | [`/preset`](presets.md) | Show or switch the project's settings and resource preset |
@@ -241,6 +243,7 @@ pi --no-extensions -e ./my-extension.ts
 
 | Option | Description |
 |--------|-------------|
+| `--plan` | Start in read-only plan mode |
 | `--system-prompt <text>` | Replace default prompt; context files and skills are still appended |
 | `--append-system-prompt <text>` | Append to system prompt |
 | `--tui-mode <mode>` | TUI mode: `regular` (default) or experimental `fullscreen` |
@@ -299,10 +302,20 @@ pi --tools read,grep,find,ls -p "Review the code"
 pi --exclude-tools ask_question
 ```
 
+## Plan Mode
+
+Use `/plan` to enter or leave read-only planning mode. You can also start in plan mode:
+
+```bash
+pi --plan
+```
+
+While planning, Pi disables the built-in `edit` and `write` tools and permits only allowlisted read-only `bash` commands. Ask Pi to return numbered steps under a `Plan:` heading. After the plan is generated, interactive mode can execute it with normal tool access and track `[DONE:n]` completion markers. Use `/todos` to inspect progress.
+
 ## Design Principles
 
-Pi keeps the core small and pushes workflow-specific behavior into extensions, skills, prompt templates, and packages.
+Pi keeps the core small and implements optional workflows through built-in or user extensions, skills, prompt templates, and packages.
 
-It intentionally does not include built-in MCP, sub-agents, permission popups, plan mode, to-dos, or background bash. You can build or install those workflows as extensions or packages, or use external tools such as containers and tmux.
+It intentionally does not include built-in MCP, sub-agents, permission popups, general-purpose to-dos, or background bash. You can build or install those workflows as extensions or packages, or use external tools such as containers and tmux.
 
 For the full rationale, read the [blog post](https://mariozechner.at/posts/2025-11-30-pi-coding-agent/).

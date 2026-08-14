@@ -2,6 +2,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { stringify } from "yaml";
 import { DefaultPackageManager } from "../src/core/package-manager.ts";
 import {
 	loadMcpRegistry,
@@ -15,6 +16,10 @@ import { SettingsManager } from "../src/core/settings-manager.ts";
 function writeJson(path: string, value: unknown, mode = 0o644): void {
 	writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, { mode });
 	chmodSync(path, mode);
+}
+
+function writePresets(path: string, value: unknown): void {
+	writeFileSync(path, stringify(value));
 }
 
 describe("preset manager", () => {
@@ -58,7 +63,7 @@ describe("preset manager", () => {
 		const baseSkill = createResource("base-skill");
 		const vueSkill = createResource("vue-skill");
 		writeMcpRegistry();
-		writeJson(join(agentDir, "presets.json"), {
+		writePresets(join(agentDir, "presets.yml"), {
 			version: 1,
 			defaultPreset: "Vue",
 			resources: { skills: { base: baseSkill, vue: vueSkill } },
@@ -103,7 +108,7 @@ describe("preset manager", () => {
 			defaultProjectTrust: "always",
 			retry: { baseDelayMs: 200 },
 		});
-		writeJson(join(agentDir, "presets.json"), {
+		writePresets(join(agentDir, "presets.yml"), {
 			version: 1,
 			base: {
 				settings: { theme: "base", defaultProjectTrust: "never", retry: { enabled: true, maxRetries: 1 } },
@@ -138,7 +143,7 @@ describe("preset manager", () => {
 			{ version: 1, mcpServers: { broken: { command: "node", url: "https://example.test/mcp" } } },
 			0o600,
 		);
-		writeJson(join(agentDir, "presets.json"), {
+		writePresets(join(agentDir, "presets.yml"), {
 			version: 1,
 			resources: { skills: { missing: "./does-not-exist" } },
 			presets: { Broken: { enable: { skills: ["missing"], mcp: ["broken"] } } },
@@ -160,7 +165,7 @@ describe("preset manager", () => {
 		writeJson(join(agentDir, "settings.json"), {
 			packages: [{ source: "./packages/lsp", autoload: false }],
 		});
-		writeJson(join(agentDir, "presets.json"), {
+		writePresets(join(agentDir, "presets.yml"), {
 			version: 1,
 			resources: { packages: { lsp: "./packages/lsp" } },
 			presets: { Vue: { enable: { packages: ["lsp"] } } },
@@ -184,7 +189,7 @@ describe("preset manager", () => {
 		const globalSkill = createResource("global-skill");
 		const presetSkill = createResource("preset-skill");
 		writeJson(join(agentDir, "settings.json"), { skills: [globalSkill] });
-		writeJson(join(agentDir, "presets.json"), {
+		writePresets(join(agentDir, "presets.yml"), {
 			version: 1,
 			resources: { skills: { preset: presetSkill } },
 			presets: { Vue: { enable: { skills: ["preset"] } } },
@@ -202,16 +207,16 @@ describe("preset manager", () => {
 	});
 
 	it("writes project selections without changing the user preset library", () => {
-		writeJson(join(agentDir, "presets.json"), { version: 1, presets: { Vue: {} } });
-		const before = readFileSync(join(agentDir, "presets.json"), "utf-8");
+		writePresets(join(agentDir, "presets.yml"), { version: 1, presets: { Vue: {} } });
+		const before = readFileSync(join(agentDir, "presets.yml"), "utf-8");
 		const path = writeProjectPresetSelection(projectDir, "Vue");
 
 		expect(path).toBe(join(projectDir, ".pi", "preset.json"));
 		expect(loadProjectPresetSelection(projectDir)).toEqual({ version: 1, preset: "Vue" });
-		expect(readFileSync(join(agentDir, "presets.json"), "utf-8")).toBe(before);
+		expect(readFileSync(join(agentDir, "presets.yml"), "utf-8")).toBe(before);
 
 		removeProjectPresetSelection(projectDir);
 		expect(loadProjectPresetSelection(projectDir)).toBeUndefined();
-		expect(readFileSync(join(agentDir, "presets.json"), "utf-8")).toBe(before);
+		expect(readFileSync(join(agentDir, "presets.yml"), "utf-8")).toBe(before);
 	});
 });

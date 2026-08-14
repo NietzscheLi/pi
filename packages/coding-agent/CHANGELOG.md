@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added a built-in optional plan mode with `/plan`, `--plan`, read-only exploration, numbered plan extraction, and execution progress tracking.
 - Added fullscreen transcript search with `Ctrl+Shift+F`, incremental match highlighting, configurable search match theme colors, and next/previous navigation with `Enter`/`Ctrl+G` and `Shift+Enter`/`Ctrl+Shift+G`.
 - Added experimental strict JSON-schema constrained sampling for the default `read`, `bash`, `edit`, and `write` tools under `PI_EXPERIMENTAL=1`.
 - Added a fullscreen exit output setting to choose between printing the final transcript and only a session resume hint.
@@ -11,6 +12,7 @@
 - Added `--use-theme <name[/name]>` to choose an initial per-run interactive theme without changing saved settings ([#7722](https://github.com/earendil-works/pi/pull/7722) by [@rwachtler](https://github.com/rwachtler)).
 - Added named presets for settings, packages, extensions, skills, and external MCP adapters, selectable per process with `--preset` or per project with `/preset`.
 - Added shared provider-balance queries for the interactive model selector and footer, including cached refreshes and `/update-balance`.
+- Added first-run initialization of missing `balance-config.yaml` and `presets.yml` user configuration templates without overwriting existing files.
 
 ### Changed
 
@@ -18,6 +20,7 @@
 - Replaced the inherited Mistral SDK transport with a native Chat Completions HTTP stream, eliminating its generated client and schema runtime overhead.
 - Documented the generic `AI_AGENT=pi` process marker and how it differs from `PI_CODING_AGENT=true` ([#7747](https://github.com/earendil-works/pi/issues/7747)).
 - Changed the interactive model selector to choose a provider before a model and merged extension statuses into the native footer stats row.
+- Changed the user preset library from JSON to YAML at `~/.pi/agent/presets.yml`.
 
 ### Fixed
 
