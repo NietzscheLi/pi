@@ -86,16 +86,10 @@ export class FooterComponent implements Component {
 
 		// Calculate cumulative usage from ALL session entries (not just post-compaction messages)
 		const usageTotals = createUsageTotals();
-		let latestCacheHitRate: number | undefined;
 
 		for (const entry of this.session.sessionManager.getEntries()) {
 			if (entry.type === "message" && entry.message.role === "assistant") {
 				addUsageToTotals(usageTotals, entry.message.usage);
-
-				const latestPromptTokens =
-					entry.message.usage.input + entry.message.usage.cacheRead + entry.message.usage.cacheWrite;
-				latestCacheHitRate =
-					latestPromptTokens > 0 ? (entry.message.usage.cacheRead / latestPromptTokens) * 100 : undefined;
 			} else if (entry.type === "message" && entry.message.role === "toolResult" && entry.message.usage) {
 				addUsageToTotals(usageTotals, entry.message.usage);
 			} else if ((entry.type === "branch_summary" || entry.type === "compaction") && entry.usage) {
@@ -125,24 +119,15 @@ export class FooterComponent implements Component {
 			pwd = `${pwd} • ${sessionName}`;
 		}
 
-		// Build stats line
-		const statsParts = [];
-		if (usageTotals.input) statsParts.push(`↑${formatTokens(usageTotals.input)}`);
-		if (usageTotals.output) statsParts.push(`↓${formatTokens(usageTotals.output)}`);
-		if (usageTotals.cacheRead) statsParts.push(`R${formatTokens(usageTotals.cacheRead)}`);
-		if (usageTotals.cacheWrite) statsParts.push(`W${formatTokens(usageTotals.cacheWrite)}`);
-		if ((usageTotals.cacheRead > 0 || usageTotals.cacheWrite > 0) && latestCacheHitRate !== undefined) {
-			statsParts.push(`CH${latestCacheHitRate.toFixed(1)}%`);
-		}
-
-		// Kimi Coding is subscription-backed despite using API-key authentication.
-		const usingSubscription = state.model
-			? state.model.provider === "kimi-coding" || this.session.modelRuntime.isUsingSubscription(state.model.provider)
-			: false;
-		if (usageTotals.cost || usingSubscription) {
-			const costStr = `$${usageTotals.cost.toFixed(3)}${usingSubscription ? " (sub)" : ""}`;
-			statsParts.push(costStr);
-		}
+		// Build stats line using the same compact token summary as Pikit.
+		const totalTokens = usageTotals.input + usageTotals.output + usageTotals.cacheRead + usageTotals.cacheWrite;
+		const promptTokens = usageTotals.input + usageTotals.cacheRead + usageTotals.cacheWrite;
+		const cacheHitRate = promptTokens > 0 ? (usageTotals.cacheRead / promptTokens) * 100 : 0;
+		const statsParts = [
+			`T: ${formatTokens(totalTokens)} (${cacheHitRate.toFixed(1)}% cached)`,
+			`↑ ${formatTokens(usageTotals.input)}`,
+			`↓ ${formatTokens(usageTotals.output)}`,
+		];
 
 		// Colorize context percentage based on usage
 		let contextPercentStr: string;
@@ -164,8 +149,24 @@ export class FooterComponent implements Component {
 		}
 		const nativeStatsLeft = statsParts.join(" ");
 
+		const footerSettings = this.session.settingsManager.getFooterSettings();
+		const customStatusOrder = ["preset", "tps", "balance"];
+		const statusEnabled = (key: string): boolean => {
+			if (key === "preset") return footerSettings.showPreset;
+			if (key === "tps") return footerSettings.showTps;
+			if (key === "balance") return footerSettings.showBalance;
+			return true;
+		};
 		const extensionStatuses = Array.from(this.footerData.getExtensionStatuses().entries())
-			.sort(([a], [b]) => a.localeCompare(b))
+			.filter(([key]) => statusEnabled(key))
+			.sort(([a], [b]) => {
+				const aIndex = customStatusOrder.indexOf(a);
+				const bIndex = customStatusOrder.indexOf(b);
+				if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
+				if (aIndex === -1) return -1;
+				if (bIndex === -1) return 1;
+				return aIndex - bIndex;
+			})
 			.map(([, text]) => theme.fg("dim", sanitizeStatusText(text)));
 		for (const status of extensionStatuses) {
 			statsParts.push(theme.fg("dim", "•"), status);

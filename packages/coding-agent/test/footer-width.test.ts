@@ -24,7 +24,9 @@ function createSession(options: {
 	branchUsage?: AssistantUsage;
 	compactionUsage?: AssistantUsage;
 	toolUsage?: AssistantUsage;
-	usingSubscription?: boolean;
+	showFooterPreset?: boolean;
+	showFooterTps?: boolean;
+	showFooterBalance?: boolean;
 }): AgentSession {
 	const usage = options.usage;
 	const entries: Array<Record<string, unknown>> = [];
@@ -79,8 +81,12 @@ function createSession(options: {
 			getCwd: () => "/tmp/project",
 		},
 		getContextUsage: () => ({ contextWindow: 200_000, percent: 12.3 }),
-		modelRuntime: {
-			isUsingSubscription: () => options.usingSubscription ?? false,
+		settingsManager: {
+			getFooterSettings: () => ({
+				showPreset: options.showFooterPreset ?? true,
+				showTps: options.showFooterTps ?? true,
+				showBalance: options.showFooterBalance ?? true,
+			}),
 		},
 	};
 
@@ -155,45 +161,20 @@ describe("FooterComponent width handling", () => {
 		}
 	});
 
-	it("includes summary and tool result usage in the total cost", () => {
+	it("includes summary and tool result usage in the token total", () => {
 		const session = createSession({
 			sessionName: "",
-			usage: {
-				input: 100,
-				output: 10,
-				cacheRead: 0,
-				cacheWrite: 0,
-				cost: { total: 0.5 },
-			},
-			branchUsage: {
-				input: 20,
-				output: 5,
-				cacheRead: 0,
-				cacheWrite: 0,
-				cost: { total: 0.25 },
-			},
-			compactionUsage: {
-				input: 5,
-				output: 2,
-				cacheRead: 0,
-				cacheWrite: 0,
-				cost: { total: 0.125 },
-			},
-			toolUsage: {
-				input: 15,
-				output: 3,
-				cacheRead: 0,
-				cacheWrite: 0,
-				cost: { total: 0.375 },
-			},
+			usage: { input: 100, output: 10, cacheRead: 0, cacheWrite: 0, cost: { total: 0.5 } },
+			branchUsage: { input: 20, output: 5, cacheRead: 0, cacheWrite: 0, cost: { total: 0.25 } },
+			compactionUsage: { input: 5, output: 2, cacheRead: 0, cacheWrite: 0, cost: { total: 0.125 } },
+			toolUsage: { input: 15, output: 3, cacheRead: 0, cacheWrite: 0, cost: { total: 0.375 } },
 		});
 		const footer = new FooterComponent(session, createFooterData(1));
 
-		const statsLine = stripAnsi(footer.render(120)[1]);
-		expect(statsLine).toContain("$1.250");
+		expect(stripAnsi(footer.render(120)[1])).toContain("T: 160");
 	});
 
-	it("shows the latest cache hit rate when cache usage is present", () => {
+	it("shows Pikit-style totals and cache hit percentage", () => {
 		const session = createSession({
 			sessionName: "",
 			usage: {
@@ -207,13 +188,12 @@ describe("FooterComponent width handling", () => {
 		const footer = new FooterComponent(session, createFooterData(1));
 
 		const statsLine = stripAnsi(footer.render(120)[1]);
-		expect(statsLine).toContain("CH25.0%");
+		expect(statsLine).toContain("T: 210 (25.0% cached) ↑ 100 ↓ 10");
 	});
 
-	it("marks Kimi Coding costs as subscription estimates", () => {
+	it("does not show the usage cost", () => {
 		const session = createSession({
 			sessionName: "",
-			provider: "kimi-coding",
 			usage: {
 				input: 100,
 				output: 10,
@@ -224,39 +204,14 @@ describe("FooterComponent width handling", () => {
 		});
 		const footer = new FooterComponent(session, createFooterData(1));
 
-		expect(stripAnsi(footer.render(120)[1])).toContain("$1.234 (sub)");
+		expect(stripAnsi(footer.render(120)[1])).not.toContain("$1.234");
 	});
 
-	it("marks explicitly identified subscription auth", () => {
-		const session = createSession({ sessionName: "", provider: "anthropic", usingSubscription: true });
-		const footer = new FooterComponent(session, createFooterData(1));
-
-		expect(stripAnsi(footer.render(120)[1])).toContain("$0.000 (sub)");
-	});
-
-	it("does not mark generic OAuth sign-in as a subscription", () => {
-		const session = createSession({
-			sessionName: "",
-			provider: "openrouter",
-			usage: {
-				input: 100,
-				output: 10,
-				cacheRead: 0,
-				cacheWrite: 0,
-				cost: { total: 1.234 },
-			},
-		});
-		const footer = new FooterComponent(session, createFooterData(1));
-		const stats = stripAnsi(footer.render(120)[1]);
-
-		expect(stats).toContain("$1.234");
-		expect(stats).not.toContain("(sub)");
-	});
-
-	it("places extension statuses in the native stats row in stable key order", () => {
+	it("places custom statuses independently with balance last", () => {
 		const session = createSession({ sessionName: "", modelId: "current-model" });
 		const statuses = new Map([
-			["status-footer", "TPS 12.3 · balance: 8 CNY"],
+			["balance", "8 CNY"],
+			["tps", "TPS 12.3"],
 			["preset", "preset:Vue"],
 		]);
 		const footer = new FooterComponent(session, createFooterData(1, statuses));
@@ -264,17 +219,40 @@ describe("FooterComponent width handling", () => {
 		const stats = stripAnsi(lines[1]);
 
 		expect(lines).toHaveLength(2);
-		expect(stats).toContain("12.3%/200k (auto) • preset:Vue • TPS 12.3 · balance: 8 CNY");
+		expect(stats).toContain("12.3%/200k (auto) • preset:Vue • TPS 12.3 • 8 CNY");
 		expect(lines[1]).toContain(theme.fg("dim", "preset:Vue"));
-		expect(lines[1]).toContain(theme.fg("dim", "TPS 12.3 · balance: 8 CNY"));
+		expect(lines[1]).toContain(theme.fg("dim", "TPS 12.3"));
+		expect(lines[1]).toContain(theme.fg("dim", "8 CNY"));
+		expect(stats).not.toContain("balance");
 		expect(stats).toMatch(/current-model$/);
+	});
+
+	it("can hide each custom status independently", () => {
+		const session = createSession({
+			sessionName: "",
+			showFooterPreset: false,
+			showFooterTps: true,
+			showFooterBalance: false,
+		});
+		const statuses = new Map([
+			["preset", "preset:Vue"],
+			["tps", "TPS 12.3"],
+			["balance", "8 CNY"],
+		]);
+		const footer = new FooterComponent(session, createFooterData(1, statuses));
+		const stats = stripAnsi(footer.render(120)[1]);
+
+		expect(stats).not.toContain("preset:Vue");
+		expect(stats).toContain("TPS 12.3");
+		expect(stats).not.toContain("8 CNY");
 	});
 
 	it("keeps the current model visible when extension statuses need truncation", () => {
 		const session = createSession({ sessionName: "", modelId: "current-model" });
 		const statuses = new Map([
 			["preset", "preset:A-very-long-project-preset"],
-			["status-footer", "TPS 123.4 · balance: 12,345.6789 CNY (refreshing…)"],
+			["tps", "TPS 123.4"],
+			["balance", "12,345.6789 CNY (refreshing…)"],
 		]);
 		const footer = new FooterComponent(session, createFooterData(1, statuses));
 

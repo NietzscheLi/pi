@@ -589,7 +589,13 @@ export class InteractiveMode {
 		this.editor = this.defaultEditor;
 		this.editorContainer = new Container();
 		this.editorContainer.addChild(this.editor as Component);
-		this.footerDataProvider = new FooterDataProvider(this.sessionManager.getCwd());
+		this.footerDataProvider = new FooterDataProvider(this.sessionManager.getCwd(), (key) => {
+			const footerSettings = this.settingsManager.getFooterSettings();
+			if (key === "preset") return footerSettings.showPreset;
+			if (key === "tps") return footerSettings.showTps;
+			if (key === "balance") return footerSettings.showBalance;
+			return true;
+		});
 		this.footer = new FooterComponent(this.session, this.footerDataProvider);
 		this.footer.setAutoCompactEnabled(this.session.autoCompactionEnabled);
 		this.footerContainer = new Container();
@@ -4451,6 +4457,9 @@ export class InteractiveMode {
 					treeFilterMode: this.settingsManager.getTreeFilterMode(),
 					showHardwareCursor: this.settingsManager.getShowHardwareCursor(),
 					showCacheMissNotices: this.settingsManager.getShowCacheMissNotices(),
+					showFooterPreset: this.settingsManager.getFooterSettings().showPreset,
+					showFooterTps: this.settingsManager.getFooterSettings().showTps,
+					showFooterBalance: this.settingsManager.getFooterSettings().showBalance,
 					defaultProjectTrust: this.settingsManager.getDefaultProjectTrust(),
 					editorPaddingX: this.settingsManager.getEditorPaddingX(),
 					outputPad: this.settingsManager.getOutputPad(),
@@ -4538,6 +4547,21 @@ export class InteractiveMode {
 					onShowCacheMissNoticesChange: (shown) => {
 						this.settingsManager.setShowCacheMissNotices(shown);
 						this.rebuildChatFromMessages();
+					},
+					onShowFooterPresetChange: (shown) => {
+						this.settingsManager.setFooterStatusVisible("preset", shown);
+						this.footer.invalidate();
+						this.ui.requestRender();
+					},
+					onShowFooterTpsChange: (shown) => {
+						this.settingsManager.setFooterStatusVisible("tps", shown);
+						this.footer.invalidate();
+						this.ui.requestRender();
+					},
+					onShowFooterBalanceChange: (shown) => {
+						this.settingsManager.setFooterStatusVisible("balance", shown);
+						this.footer.invalidate();
+						this.ui.requestRender();
 					},
 					onCollapseChangelogChange: (collapsed) => {
 						this.settingsManager.setCollapseChangelog(collapsed);

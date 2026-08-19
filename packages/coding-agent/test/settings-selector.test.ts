@@ -14,6 +14,36 @@ describe("SettingsSelectorComponent", () => {
 		setKeybindings(new KeybindingsManager());
 	});
 
+	it("cycles footer status settings", () => {
+		const onPresetChange = vi.fn();
+		const onBalanceChange = vi.fn();
+		const config = {
+			showFooterPreset: true,
+			showFooterTps: true,
+			showFooterBalance: true,
+			fullscreenExitOutput: "transcript",
+			fullscreenScrollbar: "auto",
+			warnings: {},
+			availableThinkingLevels: [],
+			availableThemes: [],
+		} as unknown as SettingsConfig;
+		const callbacks = {
+			onShowFooterPresetChange: onPresetChange,
+			onShowFooterBalanceChange: onBalanceChange,
+		} as unknown as SettingsCallbacks;
+
+		const toggle = (label: string) => {
+			const list = new SettingsSelectorComponent(config, callbacks).getSettingsList();
+			for (const character of label) list.handleInput(character);
+			list.handleInput("\r");
+		};
+
+		toggle("Footer preset");
+		toggle("balance");
+		expect(onPresetChange).toHaveBeenCalledWith(false);
+		expect(onBalanceChange).toHaveBeenCalledWith(false);
+	});
+
 	it("cycles through fullscreen settings", () => {
 		const onExitOutputChange = vi.fn();
 		const onScrollbarChange = vi.fn();

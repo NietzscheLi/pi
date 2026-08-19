@@ -234,6 +234,31 @@ describe("FooterDataProvider reftable branch detection", () => {
 		}
 	});
 
+	it("filters extension statuses dynamically", () => {
+		const repoDir = createPlainRepo(tempDir);
+		const hidden = new Set(["tps"]);
+		const provider = new FooterDataProvider(repoDir, (key) => !hidden.has(key));
+		try {
+			provider.setExtensionStatus("preset", "preset:Tools");
+			provider.setExtensionStatus("tps", "TPS 12.3");
+			provider.setExtensionStatus("balance", "8 CNY");
+
+			expect(Array.from(provider.getExtensionStatuses())).toEqual([
+				["preset", "preset:Tools"],
+				["balance", "8 CNY"],
+			]);
+
+			hidden.delete("tps");
+			expect(Array.from(provider.getExtensionStatuses())).toEqual([
+				["preset", "preset:Tools"],
+				["tps", "TPS 12.3"],
+				["balance", "8 CNY"],
+			]);
+		} finally {
+			provider.dispose();
+		}
+	});
+
 	it("retries git watchers 5 seconds after an async fs.watch error", async () => {
 		vi.useFakeTimers();
 		const repoDir = createPlainRepo(tempDir);

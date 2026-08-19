@@ -44,6 +44,12 @@ export interface TerminalSettings {
 	showTerminalProgress?: boolean; // default: false (OSC 9;4 terminal progress indicators)
 }
 
+export interface FooterSettings {
+	showPreset?: boolean; // default: true
+	showTps?: boolean; // default: true
+	showBalance?: boolean; // default: true
+}
+
 export interface ImageSettings {
 	autoResize?: boolean; // default: true (resize images to 2000x2000 max for better model compatibility)
 	blockImages?: boolean; // default: false - when true, prevents all images from being sent to LLM providers
@@ -102,6 +108,7 @@ export interface Settings {
 	retry?: RetrySettings;
 	hideThinkingBlock?: boolean;
 	showCacheMissNotices?: boolean; // default: false - show transcript notices for significant prompt-cache misses
+	footer?: FooterSettings;
 	externalEditor?: string; // Command for Ctrl+G external editor; takes precedence over VISUAL/EDITOR
 	shellPath?: string; // Custom shell path (e.g., for Cygwin users on Windows); supports leading ~ expansion
 	quietStartup?: boolean;
@@ -925,6 +932,22 @@ export class SettingsManager {
 
 	getShowCacheMissNotices(): boolean {
 		return this.settings.showCacheMissNotices ?? false;
+	}
+
+	getFooterSettings(): { showPreset: boolean; showTps: boolean; showBalance: boolean } {
+		return {
+			showPreset: this.settings.footer?.showPreset ?? true,
+			showTps: this.settings.footer?.showTps ?? true,
+			showBalance: this.settings.footer?.showBalance ?? true,
+		};
+	}
+
+	setFooterStatusVisible(status: "preset" | "tps" | "balance", visible: boolean): void {
+		if (!this.globalSettings.footer) this.globalSettings.footer = {};
+		const key = status === "preset" ? "showPreset" : status === "tps" ? "showTps" : "showBalance";
+		this.globalSettings.footer[key] = visible;
+		this.markModified("footer", key);
+		this.save();
 	}
 
 	getExternalEditorCommand(): string {

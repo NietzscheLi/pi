@@ -34,6 +34,9 @@ Use `/trust` in interactive mode to save a project trust decision for future ses
 | `defaultThinkingLevel` | string | - | `"off"`, `"minimal"`, `"low"`, `"medium"`, `"high"`, `"xhigh"`, `"max"` |
 | `hideThinkingBlock` | boolean | `false` | Hide thinking blocks in output |
 | `showCacheMissNotices` | boolean | `false` | Show transcript notices for significant prompt-cache misses |
+| `footer.showPreset` | boolean | `true` | Show the active preset in the footer |
+| `footer.showTps` | boolean | `true` | Show the latest output tokens per second in the footer |
+| `footer.showBalance` | boolean | `true` | Show the current provider balance in the footer |
 | `thinkingBudgets` | object | - | Custom token budgets per thinking level |
 
 #### thinkingBudgets

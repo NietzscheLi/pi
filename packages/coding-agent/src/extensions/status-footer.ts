@@ -7,7 +7,7 @@ export default function statusFooterExtension(pi: ExtensionAPI): void {
 	let lastOutputTps: number | undefined;
 	let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 	let refreshGeneration = 0;
-	let refreshStatus: (() => void) | undefined;
+	let refreshStatuses: (() => void) | undefined;
 	let unsubscribeBalance: (() => void) | undefined;
 
 	const refreshBalance = async (ctx: ExtensionContext, force = false) => {
@@ -38,23 +38,24 @@ export default function statusFooterExtension(pi: ExtensionAPI): void {
 			const message = event.message as AssistantMessage;
 			lastOutputTps = message.usage.output / Math.max((Date.now() - turnStartedAt) / 1000, 0.001);
 		}
-		refreshStatus?.();
+		refreshStatuses?.();
 	});
 	pi.on("model_select", (_event, ctx) => {
-		refreshStatus?.();
+		refreshStatuses?.();
 		void refreshBalance(ctx);
 	});
 	pi.on("session_start", (_event, ctx) => {
-		refreshStatus = () => {
+		refreshStatuses = () => {
 			const balanceText = ctx.model ? formatProviderBalance(providerBalanceService.get(ctx.model.provider)) : "--";
 			const tps = lastOutputTps === undefined ? "TPS --" : `TPS ${lastOutputTps.toFixed(1)}`;
-			ctx.ui.setStatus("status-footer", `${tps}  ·  balance: ${balanceText}`);
+			ctx.ui.setStatus("tps", tps);
+			ctx.ui.setStatus("balance", balanceText);
 		};
 		unsubscribeBalance?.();
 		unsubscribeBalance = providerBalanceService.subscribe((providerName) => {
-			if (providerName === ctx.model?.provider) refreshStatus?.();
+			if (providerName === ctx.model?.provider) refreshStatuses?.();
 		});
-		refreshStatus();
+		refreshStatuses();
 		const intervalMinutes = providerBalanceService.getRefreshIntervalMinutes();
 		const generation = ++refreshGeneration;
 		const schedule = (): void => {
@@ -71,7 +72,7 @@ export default function statusFooterExtension(pi: ExtensionAPI): void {
 		refreshGeneration += 1;
 		if (refreshTimer) clearTimeout(refreshTimer);
 		refreshTimer = undefined;
-		refreshStatus = undefined;
+		refreshStatuses = undefined;
 		unsubscribeBalance?.();
 		unsubscribeBalance = undefined;
 	});

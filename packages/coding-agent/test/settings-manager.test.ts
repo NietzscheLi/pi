@@ -570,6 +570,25 @@ describe("SettingsManager", () => {
 		});
 	});
 
+	describe("footer status settings", () => {
+		it("enables all custom statuses by default and persists independent overrides", async () => {
+			const manager = SettingsManager.create(projectDir, agentDir);
+			expect(manager.getFooterSettings()).toEqual({ showPreset: true, showTps: true, showBalance: true });
+
+			manager.setFooterStatusVisible("preset", false);
+			manager.setFooterStatusVisible("tps", false);
+			manager.setFooterStatusVisible("balance", false);
+			await manager.flush();
+
+			expect(manager.getFooterSettings()).toEqual({ showPreset: false, showTps: false, showBalance: false });
+			expect(JSON.parse(readFileSync(join(agentDir, "settings.json"), "utf-8")).footer).toEqual({
+				showPreset: false,
+				showTps: false,
+				showBalance: false,
+			});
+		});
+	});
+
 	describe("getShellPath", () => {
 		it("should return undefined when not set", () => {
 			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ theme: "dark" }));

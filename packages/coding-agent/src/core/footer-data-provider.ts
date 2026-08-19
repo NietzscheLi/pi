@@ -99,6 +99,7 @@ function shouldPollGitHead(repoDir: string): boolean {
 export class FooterDataProvider {
 	private cwd: string;
 	private static readonly WATCH_DEBOUNCE_MS = 500;
+	private isExtensionStatusVisible: (key: string) => boolean;
 
 	private extensionStatuses = new Map<string, string>();
 	private cachedBranch: string | null | undefined = undefined;
@@ -117,8 +118,9 @@ export class FooterDataProvider {
 	private refreshPending = false;
 	private disposed = false;
 
-	constructor(cwd: string) {
+	constructor(cwd: string, isExtensionStatusVisible: (key: string) => boolean = () => true) {
 		this.cwd = cwd;
+		this.isExtensionStatusVisible = isExtensionStatusVisible;
 		this.gitPaths = findGitPaths(cwd);
 		this.setupGitWatcher();
 	}
@@ -133,7 +135,7 @@ export class FooterDataProvider {
 
 	/** Extension status texts set via ctx.ui.setStatus() */
 	getExtensionStatuses(): ReadonlyMap<string, string> {
-		return this.extensionStatuses;
+		return new Map(Array.from(this.extensionStatuses).filter(([key]) => this.isExtensionStatusVisible(key)));
 	}
 
 	/** Subscribe to git branch changes. Returns unsubscribe function. */

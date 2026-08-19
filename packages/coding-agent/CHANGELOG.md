@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Changed the native footer to use a Pikit-style token/cache summary, replace usage cost with provider balance, and expose preset, TPS, and balance as independently configurable status items.
+
 ### Fixed
 
 - Fixed the subagent example repeatedly prompting before running project-local agents in trusted repositories ([#8261](https://github.com/earendil-works/pi/issues/8261)).
