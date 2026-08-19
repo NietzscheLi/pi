@@ -7,6 +7,7 @@ import { dirname, join } from "path";
 import lockfile from "proper-lockfile";
 import { CONFIG_DIR_NAME, getAgentDir } from "../config.ts";
 import { normalizePath, resolvePath } from "../utils/paths.ts";
+import { stripBom } from "../utils/text.ts";
 import { DEFAULT_HTTP_IDLE_TIMEOUT_MS, parseHttpIdleTimeoutMs } from "./http-dispatcher.ts";
 import { type ResolvedPreset, resolvePreset } from "./preset-manager.ts";
 
@@ -199,7 +200,18 @@ export interface SettingsStorage {
 
 export interface SettingsError {
 	scope: SettingsScope;
+	path?: string;
 	error: Error;
+}
+
+type SettingsPaths = Partial<Record<SettingsScope, string>>;
+
+function toSettingsError(scope: SettingsScope, error: unknown, path?: string): SettingsError {
+	return {
+		scope,
+		...(path ? { path } : {}),
+		error: error instanceof Error ? error : new Error(String(error)),
+	};
 }
 
 export class FileSettingsStorage implements SettingsStorage {
@@ -308,6 +320,7 @@ export class SettingsManager {
 	private projectSettingsLoadError: Error | null = null; // Track if project settings file had parse errors
 	private writeQueue: Promise<void> = Promise.resolve();
 	private errors: SettingsError[];
+	private settingsPaths: SettingsPaths;
 
 	private constructor(
 		storage: SettingsStorage,
@@ -320,6 +333,7 @@ export class SettingsManager {
 		presetSettings: Settings = {},
 		resolvedPreset?: ResolvedPreset,
 		fileContext?: { cwd: string; agentDir: string; cliPreset?: string },
+		settingsPaths: SettingsPaths = {},
 	) {
 		this.storage = storage;
 		this.globalSettings = initialGlobal;
@@ -330,6 +344,7 @@ export class SettingsManager {
 		this.cwd = fileContext?.cwd;
 		this.agentDir = fileContext?.agentDir;
 		this.cliPreset = fileContext?.cliPreset;
+		this.settingsPaths = settingsPaths;
 		this.globalSettingsLoadError = globalLoadError;
 		this.projectSettingsLoadError = projectLoadError;
 		this.errors = [...initialErrors];
@@ -350,11 +365,20 @@ export class SettingsManager {
 			agentDir: resolvedAgentDir,
 			cliPreset: options.cliPreset,
 		});
-		return SettingsManager.fromStorage(storage, options, resolvedPreset, {
-			cwd: resolvedCwd,
-			agentDir: resolvedAgentDir,
-			cliPreset: options.cliPreset,
-		});
+		return SettingsManager.fromStorage(
+			storage,
+			options,
+			resolvedPreset,
+			{
+				cwd: resolvedCwd,
+				agentDir: resolvedAgentDir,
+				cliPreset: options.cliPreset,
+			},
+			{
+				global: join(resolvedAgentDir, "settings.json"),
+				project: join(resolvedCwd, CONFIG_DIR_NAME, "settings.json"),
+			},
+		);
 	}
 
 	/** Create a SettingsManager from an arbitrary storage backend */
@@ -363,16 +387,17 @@ export class SettingsManager {
 		options: SettingsManagerCreateOptions = {},
 		resolvedPreset?: ResolvedPreset,
 		fileContext?: { cwd: string; agentDir: string; cliPreset?: string },
+		settingsPaths: SettingsPaths = {},
 	): SettingsManager {
 		const projectTrusted = options.projectTrusted ?? true;
 		const globalLoad = SettingsManager.tryLoadFromStorage(storage, "global");
 		const projectLoad = SettingsManager.tryLoadFromStorage(storage, "project", projectTrusted);
 		const initialErrors: SettingsError[] = [];
 		if (globalLoad.error) {
-			initialErrors.push({ scope: "global", error: globalLoad.error });
+			initialErrors.push(toSettingsError("global", globalLoad.error, settingsPaths.global));
 		}
 		if (projectLoad.error) {
-			initialErrors.push({ scope: "project", error: projectLoad.error });
+			initialErrors.push(toSettingsError("project", projectLoad.error, settingsPaths.project));
 		}
 
 		return new SettingsManager(
@@ -386,6 +411,7 @@ export class SettingsManager {
 			resolvedPreset?.settings ?? {},
 			resolvedPreset,
 			fileContext,
+			settingsPaths,
 		);
 	}
 
@@ -430,7 +456,7 @@ export class SettingsManager {
 		if (!content) {
 			return {};
 		}
-		const settings = JSON.parse(content);
+		const settings = JSON.parse(stripBom(content));
 		return SettingsManager.migrateSettings(settings);
 	}
 
@@ -617,8 +643,7 @@ export class SettingsManager {
 	}
 
 	private recordError(scope: SettingsScope, error: unknown): void {
-		const normalizedError = error instanceof Error ? error : new Error(String(error));
-		this.errors.push({ scope, error: normalizedError });
+		this.errors.push(toSettingsError(scope, error, this.settingsPaths[scope]));
 	}
 
 	private clearModifiedScope(scope: SettingsScope): void {
@@ -662,7 +687,7 @@ export class SettingsManager {
 	): void {
 		this.storage.withLock(scope, (current) => {
 			const currentFileSettings = current
-				? SettingsManager.migrateSettings(JSON.parse(current) as Record<string, unknown>)
+				? SettingsManager.migrateSettings(JSON.parse(stripBom(current)) as Record<string, unknown>)
 				: {};
 			const mergedSettings: Settings = { ...currentFileSettings };
 			for (const field of modifiedFields) {
