@@ -51,6 +51,7 @@
 ## Upstream Synchronization
 
 - The upstream repository is `https://github.com/earendil-works/pi`.
+- This project is hosted on GitHub. Prefer GitHub CLI (`gh`) for GitHub repository, Issue, Pull Request, Actions, release, and related operations.
 - When merging branches from the upstream repository, read and follow [`docs/upstream-differences.md`](docs/upstream-differences.md). Use its change log and feature contracts to preserve local fork behavior while integrating upstream changes.
 
 ## Git
