@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added transcript usage notices for compaction and branch summaries when cache miss notices are enabled.
+
 ### Changed
 
 - Changed the native footer to use a Pikit-style token/cache summary, replace usage cost with provider balance, and expose preset, TPS, and balance as independently configurable status items.
