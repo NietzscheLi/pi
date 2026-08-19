@@ -14,6 +14,12 @@
 
 Pi 是一个简洁、可扩展的编码代理框架，以及驱动它运行的 TypeScript 库集合。本仓库包含终端编码代理、统一的 LLM API、代理运行时、终端 UI 组件，以及实验性的远程会话软件包。
 
+## Fork 与上游差异
+
+这是 [earendil-works/pi](https://github.com/earendil-works/pi) 的 fork。请参阅[上游差异说明](docs/upstream-differences.md)，其中记录了本 fork 长期维护的本地改动及其行为契约，并提供同步后续上游更新、解决冲突和执行回归检查的指引。
+
+英文文档请参阅 [README.md](README.md)。
+
 Pi 鼓励通过[扩展](packages/coding-agent/docs/extensions.md)、[技能](packages/coding-agent/docs/skills.md)、[提示模板](packages/coding-agent/docs/prompt-templates.md)、[主题](packages/coding-agent/docs/themes.md)和 [Pi Packages](packages/coding-agent/docs/packages.md) 进行定制，而不是修改或 fork 核心代码。
 
 ## 使用编码代理

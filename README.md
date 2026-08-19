@@ -14,6 +14,12 @@
 
 Pi is a minimal, extensible coding-agent harness and the TypeScript libraries that power it. This repository contains the terminal agent, a provider-neutral LLM API, the agent runtime, terminal UI components, and experimental remote-session packages.
 
+## Fork and upstream differences
+
+This is a fork of [earendil-works/pi](https://github.com/earendil-works/pi). See [Upstream differences](docs/upstream-differences.md) for this fork's long-lived local changes, their behavioral contracts, and guidance for synchronizing future upstream updates, resolving conflicts, and running regression checks.
+
+Chinese documentation is available in [README.zh-CN.md](README.zh-CN.md).
+
 Pi is designed to be adapted through [extensions](packages/coding-agent/docs/extensions.md), [skills](packages/coding-agent/docs/skills.md), [prompt templates](packages/coding-agent/docs/prompt-templates.md), [themes](packages/coding-agent/docs/themes.md), and [Pi packages](packages/coding-agent/docs/packages.md), rather than by forking the core.
 
 ## Use the coding agent
