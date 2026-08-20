@@ -3039,7 +3039,7 @@ export class InteractiveMode {
 					this.showError(args.error);
 					return;
 				}
-				await this.handleModelCommand(args.searchTerm, { persist: args.persist });
+				await this.handleModelCommand(args.searchTerm, { persist: true });
 				return;
 			}
 			if (text === "/thinking" || text.startsWith("/thinking ")) {
