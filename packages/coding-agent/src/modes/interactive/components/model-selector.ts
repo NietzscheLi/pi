@@ -5,6 +5,7 @@ import {
 	fuzzyFilter,
 	getKeybindings,
 	Input,
+	matchesKey,
 	Spacer,
 	Text,
 	type TUI,
@@ -15,7 +16,6 @@ import {
 	type ProviderBalanceReader,
 	providerBalanceService,
 } from "../../../core/provider-balance.ts";
-import type { SettingsManager } from "../../../core/settings-manager.ts";
 import { refreshModelCatalogs } from "../model-catalog-refresh.ts";
 import { getModelSelectorSearchText } from "../model-search.ts";
 import { theme } from "../theme/theme.ts";
@@ -71,10 +71,10 @@ export class ModelSelectorComponent extends Container implements Focusable {
 	private selectedModelId?: string;
 	private providerOwnQueryMatches = new Set<string>();
 	private currentModel?: Model<any>;
-	private settingsManager: SettingsManager;
 	private modelRuntime: ModelRuntime;
 	private balanceService: ProviderBalanceReader;
 	private onSelectCallback: (model: Model<any>) => void;
+	private onSelectAsDefaultCallback?: (model: Model<any>) => void;
 	private onCancelCallback: () => void;
 	private errorMessage?: string;
 	private refreshStatusMessage = "Refreshing model catalogs…";
@@ -95,24 +95,24 @@ export class ModelSelectorComponent extends Container implements Focusable {
 	constructor(
 		tui: TUI,
 		currentModel: Model<any> | undefined,
-		settingsManager: SettingsManager,
 		modelRuntime: ModelRuntime,
 		scopedModels: ReadonlyArray<ScopedModelItem>,
 		onSelect: (model: Model<any>) => void,
 		onCancel: () => void,
 		initialSearchInput?: string,
+		onSelectAsDefault?: (model: Model<any>) => void,
 		balanceService: ProviderBalanceReader = providerBalanceService,
 	) {
 		super();
 
 		this.tui = tui;
 		this.currentModel = currentModel;
-		this.settingsManager = settingsManager;
 		this.modelRuntime = modelRuntime;
 		this.balanceService = balanceService;
 		this.scopedModels = scopedModels;
 		this.scope = scopedModels.length > 0 ? "scoped" : "all";
 		this.onSelectCallback = onSelect;
+		this.onSelectAsDefaultCallback = onSelectAsDefault;
 		this.onCancelCallback = onCancel;
 
 		this.addChild(new DynamicBorder());
@@ -140,6 +140,15 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		this.listContainer = new Container();
 		this.addChild(this.listContainer);
 		this.addChild(new Spacer(1));
+
+		// Hint
+		if (this.onSelectAsDefaultCallback) {
+			this.addChild(
+				new Text(theme.fg("dim", "  Enter to select \u00b7 Ctrl+S to set as default \u00b7 Esc to cancel"), 0, 0),
+			);
+		}
+
+		// Add bottom border
 		this.addChild(new DynamicBorder());
 
 		this.unsubscribeBalance = this.balanceService.subscribe((providerName) => {
@@ -522,6 +531,14 @@ export class ModelSelectorComponent extends Container implements Focusable {
 				this.dispose();
 				this.onCancelCallback();
 			}
+		} else if (matchesKey(keyData, "ctrl+s") && this.onSelectAsDefaultCallback) {
+			if (this.view === "models") {
+				const selectedModel = this.filteredModels[this.selectedModelIndex];
+				if (selectedModel) {
+					this.dispose();
+					this.onSelectAsDefaultCallback(selectedModel.model);
+				}
+			}
 		} else {
 			this.searchInput.handleInput(keyData);
 			const query = this.searchInput.getValue();
@@ -531,7 +548,6 @@ export class ModelSelectorComponent extends Container implements Focusable {
 
 	private handleSelect(model: Model<any>): void {
 		this.dispose();
-		this.settingsManager.setDefaultModelAndProvider(model.provider, model.id);
 		this.onSelectCallback(model);
 	}
 

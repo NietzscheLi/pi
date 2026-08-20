@@ -4,13 +4,13 @@
 
 ## 基线
 
-记录日期：2026-08-18（Asia/Shanghai）。
+记录日期：2026-08-26（Asia/Shanghai）。
 
 | 引用            | 提交                                         | 说明                                                   |
 | --------------- | -------------------------------------------- | ------------------------------------------------------ |
-| `upstream/main` | `209bc7b9a89b01c8fd05861cf5bbdda3e300037a` | 原始仓库 `https://github.com/earendil-works/pi.git`   |
-| `origin/main`   | `688270a9c1a36ed6fe9fad55455bb8707077bbee` | 当前 fork `https://github.com/NietzscheLi/pi.git`     |
-| 本地 `HEAD`     | `688270a9c1a36ed6fe9fad55455bb8707077bbee` | 与 `origin/main` 相同，另有本文记录的未提交 footer 改动 |
+| `upstream/main` | `b7bb00b936dbe21b8e160b3e89efdec361846699` | 原始仓库 `https://github.com/earendil-works/pi.git`   |
+| `origin/main`   | `289080f07ef733863b0155eefca61058eb8cc38a` | 当前 fork `https://github.com/NietzscheLi/pi.git`     |
+| 本地 `HEAD`     | `289080f07ef733863b0155eefca61058eb8cc38a` | 本次同步前的本地 HEAD（上一个合并提交）               |
 
 比较原始 pi 时以 `upstream/main` 为权威；`origin/main` 是本 fork 的远端，不再将未配置的 `target/main` 作为基线。
 
@@ -228,7 +228,32 @@ git switch -c integrate/upstream-YYYYMMDD upstream/main
 git range-diff <old-upstream>..<old-local-head> upstream/main..HEAD
 ```
 
-重点冲突处理顺序：
+### 2026-08-26 增量同步（9 个上游提交）
+
+直接合并 `upstream/main`（`b7bb00b9`）到 `main`，只产生一个冲突文件：
+`model-selector.ts`。上游 #8356 把模型/思考级别改为会话级（Enter 只切换当前
+会话，Ctrl+S 持久化为默认），本地两级选择器需移植该语义：
+
+- 构造函数参数顺序变为 `(tui, currentModel, modelRuntime, scopedModels, onSelect,
+  onCancel, initialSearchInput?, onSelectAsDefault?, balanceService?)`；
+  `settingsManager` 参数随上游删除，`handleSelect` 不再调用
+  `setDefaultModelAndProvider`。
+- Ctrl+S 只在 models 视图生效（providers 视图忽略），由
+  `onSelectAsDefaultCallback` 回调 `session.setModel(model, { persist: true })`。
+- 测试构造调用按新参数顺序修正（`model-selector.test.ts` 与三个
+  suite/regressions 文件）。
+
+其余文件（`agent-session.ts`、`settings-manager.ts`、`settings-selector.ts`、
+`interactive-mode.ts`、`defaults.ts`、`model-resolver.ts`、`sdk.ts`、
+`slash-commands.ts`、`thinking-selector.ts`、`packages/tui/.../settings-list.ts`）
+自动合并成功：上游新增 `/thinking` 命令、`settings-submenu.ts`、每个模型思考级别
+覆盖，本地三个 footer 开关与预设/余额接线均保留。
+
+新增/受影响测试：`interactive-mode-status.test.ts`、
+`agent-session-model-extension.test.ts`、`settings-selector.test.ts` 需要
+`availableDefaultModels`/`defaultModel`/`modelThinkingLevels` 配置字段。
+
+## 重点冲突处理顺序
 
 1. `settings-manager.ts`、`main.ts`、`package-manager.ts` 的预设优先级和启动契约。
 2. `model-selector.ts` 的上游目录刷新与本地两级状态机。
@@ -251,6 +276,8 @@ node "$(git rev-parse --show-toplevel)/node_modules/vitest/dist/cli.js" --run \
   test/footer-width.test.ts \
   test/settings-manager.test.ts \
   test/settings-selector.test.ts \
+  test/interactive-mode-status.test.ts \
+  test/suite/agent-session-model-extension.test.ts \
   test/suite/regressions/3217-scoped-model-order.test.ts \
   test/suite/regressions/6999-models-json-hot-reload.test.ts \
   test/suite/regressions/7209-model-selector-filter-resets-selection.test.ts
@@ -278,6 +305,20 @@ pi --version
 安装后还要从仓库外启动 `pi`，打开 `/model` 验证供应商层、余额、模型层和 Escape 返回，并确认 footer 仍为两行且当前模型可见。
 
 ## 当前验证
+
+2026-08-26 对本次上游增量同步（`b7bb00b9` → `289080f0` 之上）完成：
+
+- 定向 Vitest：`model-selector.test.ts`、`settings-selector.test.ts`、
+  `settings-manager.test.ts`、`footer-width.test.ts`、三个 suite/regressions、
+  `interactive-mode-status.test.ts`、`agent-session-model-extension.test.ts`、
+  `plan-mode-extension.test.ts`、`built-in-plan-mode.test.ts` 全部通过。
+- 根目录 `npm run check` 通过（Biome、固定依赖、ts-imports、shrinkwrap、install lock、
+  `tsgo --noEmit`、browser smoke）。
+- 根目录 `./test.sh` 隔离环境：sqlite-node 一个偶发 5s 超时（单独运行通过，与本次
+  合并无关，`packages/session-backends` 无改动）；coding-agent 7 个 CLI 进程级测试
+  失败（clipboard-image、session-file-invalid、session-id-readonly、
+  startup-session-name、stdout-cleanliness），已在合并前 HEAD 工作树验证同样失败，
+  属环境预存在问题。
 
 2026-08-18 已对本次 footer 独立状态与设置改动完成：
 

@@ -62,11 +62,11 @@ describe("model selector", () => {
 		const selector = new ModelSelectorComponent(
 			createFakeTui(),
 			harness.getModel(),
-			harness.settingsManager,
 			harness.session.modelRuntime,
 			[],
 			() => {},
 			() => {},
+			undefined,
 			undefined,
 			new FakeBalanceReader(),
 		);
@@ -117,11 +117,11 @@ describe("model selector", () => {
 		const selector = new ModelSelectorComponent(
 			createFakeTui(),
 			current,
-			harness.settingsManager,
 			harness.session.modelRuntime,
 			[],
 			onSelect,
 			onCancel,
+			undefined,
 			undefined,
 			balances,
 		);
@@ -153,12 +153,12 @@ describe("model selector", () => {
 		const searchSelector = new ModelSelectorComponent(
 			createFakeTui(),
 			current,
-			harness.settingsManager,
 			harness.session.modelRuntime,
 			[],
 			() => {},
 			() => {},
 			"Second Provider",
+			undefined,
 			balances,
 		);
 		expect(stripAnsi(searchSelector.render(120).join("\n"))).toContain(
@@ -178,11 +178,11 @@ describe("model selector", () => {
 		const selector = new ModelSelectorComponent(
 			createFakeTui(),
 			harness.getModel(),
-			harness.settingsManager,
 			harness.session.modelRuntime,
 			[],
 			() => {},
 			onCancel,
+			undefined,
 			undefined,
 			new FakeBalanceReader(),
 		);
