@@ -82,6 +82,56 @@ describe("ProviderBalanceService", () => {
 		expect(init?.headers).toMatchObject({ Authorization: "Bearer model-key" });
 	});
 
+	it("reads balances nested inside a response array (e.g. DeepSeek balance_infos)", async () => {
+		agentDir = mkdtempSync(join(tmpdir(), "pi-provider-balance-"));
+		writeFileSync(
+			join(agentDir, "balance-config.yaml"),
+			`profiles:
+  deepseek: &deepseek
+    request:
+      url: "{{baseUrl}}/user/balance"
+      headers:
+        Authorization: "Bearer {{apiKey}}"
+    extractor:
+      remainingPath: balance_infos.0.total_balance
+      unitPath: balance_infos.0.currency
+      validity:
+        path: is_available
+        fallback: true
+providers:
+  deepseek.test:
+    profile: *deepseek
+    request:
+      baseUrl: https://api.deepseek.com
+`,
+		);
+		const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					is_available: true,
+					balance_infos: [
+						{
+							currency: "CNY",
+							total_balance: "1.10",
+							granted_balance: "0.00",
+							topped_up_balance: "1.10",
+						},
+					],
+				}),
+				{ headers: { "Content-Type": "application/json" } },
+			),
+		);
+		const service = new ProviderBalanceService({ agentDir, fetch: fetchMock });
+
+		const resolveSource = async () => ({ baseUrl: "https://api.deepseek.com/v1", apiKey: "deepseek-key" });
+		const state = await service.refresh("deepseek.test", { resolveSource });
+		expect(state).toMatchObject({ text: "1.1 CNY", loading: false });
+
+		const [url, init] = fetchMock.mock.calls[0] ?? [];
+		expect(url).toBe("https://api.deepseek.com/user/balance");
+		expect(init?.headers).toMatchObject({ Authorization: "Bearer deepseek-key" });
+	});
+
 	it("keeps the last value when a forced refresh receives an invalid response", async () => {
 		agentDir = mkdtempSync(join(tmpdir(), "pi-provider-balance-"));
 		writeBalanceFiles(agentDir);

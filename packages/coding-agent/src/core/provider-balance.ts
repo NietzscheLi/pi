@@ -47,7 +47,11 @@ export function formatProviderBalance(state: ProviderBalanceState): string {
 
 function valueAt(value: unknown, path: string): unknown {
 	return path.split(".").reduce<unknown>((current, key) => {
-		if (!current || typeof current !== "object" || Array.isArray(current)) return undefined;
+		if (!current || typeof current !== "object") return undefined;
+		if (Array.isArray(current)) {
+			const index = Number(key);
+			return Number.isInteger(index) && index >= 0 ? current[index] : undefined;
+		}
 		return (current as JsonObject)[key];
 	}, value);
 }
