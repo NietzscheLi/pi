@@ -207,24 +207,41 @@ describe("FooterComponent width handling", () => {
 		expect(stripAnsi(footer.render(120)[1])).not.toContain("$1.234");
 	});
 
+	it("moves provider, model, and thinking level before the path", () => {
+		const session = createSession({
+			sessionName: "",
+			modelId: "current-model",
+			provider: "test-provider",
+			reasoning: true,
+			thinkingLevel: "high",
+		});
+		const footer = new FooterComponent(session, createFooterData(2));
+		const [locationLine, statsLine] = footer.render(120).map(stripAnsi);
+
+		expect(locationLine).toMatch(/^\(test-provider\) current-model • high\s+\/tmp\/project \(main\)$/);
+		expect(statsLine).not.toContain("current-model");
+	});
+
 	it("places custom statuses independently with balance last", () => {
 		const session = createSession({ sessionName: "", modelId: "current-model" });
 		const statuses = new Map([
+			["mcp", "🔌 MCP: 2 servers enabled"],
 			["balance", "8 CNY"],
 			["tps", "TPS 12.3"],
 			["preset", "preset:Vue"],
 		]);
 		const footer = new FooterComponent(session, createFooterData(1, statuses));
 		const lines = footer.render(120);
-		const stats = stripAnsi(lines[1]);
+		const [locationLine, statsLine] = lines.map(stripAnsi);
 
-		expect(lines).toHaveLength(2);
-		expect(stats).toContain("12.3%/200k (auto) • preset:Vue • TPS 12.3 • 8 CNY");
+		expect(locationLine).toContain("current-model");
+		expect(statsLine).toContain("12.3%/200k (auto) • preset:Vue • TPS 12.3 • 8 CNY • 🔌 MCP: 2 servers enabled");
 		expect(lines[1]).toContain(theme.fg("dim", "preset:Vue"));
 		expect(lines[1]).toContain(theme.fg("dim", "TPS 12.3"));
 		expect(lines[1]).toContain(theme.fg("dim", "8 CNY"));
-		expect(stats).not.toContain("balance");
-		expect(stats).toMatch(/current-model$/);
+		expect(lines[1]).toContain(theme.fg("dim", "🔌 MCP: 2 servers enabled"));
+		expect(statsLine).not.toContain("balance");
+		expect(locationLine).toContain("current-model");
 	});
 
 	it("can hide each custom status independently", () => {
@@ -257,8 +274,8 @@ describe("FooterComponent width handling", () => {
 		const footer = new FooterComponent(session, createFooterData(1, statuses));
 
 		for (const width of [40, 80, 120]) {
-			const lines = footer.render(width);
-			expect(stripAnsi(lines[1])).toMatch(/current-model$/);
+			const lines = footer.render(width).map(stripAnsi);
+			expect(lines[0]).toContain("current-model");
 			for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(width);
 		}
 	});

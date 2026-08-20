@@ -6,11 +6,11 @@
 
 记录日期：2026-08-26（Asia/Shanghai）。
 
-| 引用            | 提交                                         | 说明                                                   |
-| --------------- | -------------------------------------------- | ------------------------------------------------------ |
-| `upstream/main` | `b7bb00b936dbe21b8e160b3e89efdec361846699` | 原始仓库 `https://github.com/earendil-works/pi.git`   |
-| `origin/main`   | `289080f07ef733863b0155eefca61058eb8cc38a` | 当前 fork `https://github.com/NietzscheLi/pi.git`     |
-| 本地 `HEAD`     | `289080f07ef733863b0155eefca61058eb8cc38a` | 本次同步前的本地 HEAD（上一个合并提交）               |
+| 引用              | 提交                                         | 说明                                                 |
+| ----------------- | -------------------------------------------- | ---------------------------------------------------- |
+| `upstream/main` | `b7bb00b936dbe21b8e160b3e89efdec361846699` | 原始仓库`https://github.com/earendil-works/pi.git` |
+| `origin/main`   | `289080f07ef733863b0155eefca61058eb8cc38a` | 当前 fork`https://github.com/NietzscheLi/pi.git`   |
+| 本地`HEAD`      | `289080f07ef733863b0155eefca61058eb8cc38a` | 本次同步前的本地 HEAD（上一个合并提交）              |
 
 比较原始 pi 时以 `upstream/main` 为权威；`origin/main` 是本 fork 的远端，不再将未配置的 `target/main` 作为基线。
 
@@ -31,27 +31,27 @@ git diff --stat upstream/main...HEAD
 
 本地长期功能应按独立变更组重放，避免把 preset、余额、模型选择、footer 和 plan mode 的冲突混成整文件选择。
 
-| 变更组                    | 当前状态                 | 用户可见行为                                                                 |
-| ------------------------- | ------------------------ | ---------------------------------------------------------------------------- |
-| 命名预设                  | 已提交：`cbd1ef0`        | `--preset`、`/preset`、项目预设持久化、资源组合与切换回滚                    |
-| 供应商余额与两级模型选择  | 已提交：`3120ee3`        | 两级模型选择、共享供应商余额、定时刷新和 `/update-balance`                  |
-| Footer 独立状态与设置     | 当前工作树                  | Pikit 风格 token/cache、独立 preset/TPS/balance、三个 `/settings` 开关       |
-| Plan mode 逐项执行        | 已提交：`2ab2d2f`、`baa271b`、`d4714d2` | 内置 plan mode、稳定 task ID、逐项更新、恢复与持久化             |
-| 项目默认工具预设          | 已提交：`b800f8f`           | 当前项目 `.pi/preset.json` 默认选择 `Tools`                                  |
+| 变更组                   | 当前状态                                      | 用户可见行为                                                            |
+| ------------------------ | --------------------------------------------- | ----------------------------------------------------------------------- |
+| 命名预设                 | 已提交：`cbd1ef0`                           | `--preset`、`/preset`、项目预设持久化、资源组合与切换回滚           |
+| 供应商余额与两级模型选择 | 已提交：`3120ee3`                           | 两级模型选择、共享供应商余额、定时刷新和`/update-balance`             |
+| Footer 独立状态与设置    | 当前工作树                                    | Pikit 风格 token/cache、独立 preset/TPS/balance、三个`/settings` 开关 |
+| Plan mode 逐项执行       | 已提交：`2ab2d2f`、`baa271b`、`d4714d2` | 内置 plan mode、稳定 task ID、逐项更新、恢复与持久化                    |
+| 项目默认工具预设         | 已提交：`b800f8f`                           | 当前项目`.pi/preset.json` 默认选择 `Tools`                          |
 
 ### 本地提交来源
 
 以下功能历史只总结作者为 `lzy <nietzsche.li@outlook.com>` 的非 merge 提交；合并进来的上游提交不计入本地功能来源：
 
-| 提交       | 本地职责 |
-| ---------- | -------- |
-| `cbd1ef0` | 命名预设、资源组合、项目选择和切换回滚 |
+| 提交        | 本地职责                                      |
+| ----------- | --------------------------------------------- |
+| `cbd1ef0` | 命名预设、资源组合、项目选择和切换回滚        |
 | `3120ee3` | 共享供应商余额、两级模型选择和初版统一 footer |
-| `9c171c1` | 项目中英文 README 更新 |
-| `2ab2d2f` | 内置 plan mode、默认配置与基础测试 |
-| `baa271b` | plan mode 按 task ID 逐项完成和调度 |
-| `d4714d2` | 配置锚点、plan 状态恢复及相关文档/测试修正 |
-| `b800f8f` | 将当前项目默认预设切换为 `Tools` |
+| `9c171c1` | 项目中英文 README 更新                        |
+| `2ab2d2f` | 内置 plan mode、默认配置与基础测试            |
+| `baa271b` | plan mode 按 task ID 逐项完成和调度           |
+| `d4714d2` | 配置锚点、plan 状态恢复及相关文档/测试修正    |
+| `b800f8f` | 将当前项目默认预设切换为`Tools`             |
 
 ## Plan mode 逐项执行
 
@@ -193,18 +193,18 @@ MCP 注册表只定义服务器和选中的 ID，不提供 MCP 客户端实现�
 
 ### 关键文件
 
-| 文件                                                                            | 本地职责                                                | 合并注意点                                                   |
-| ------------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------ |
-| `packages/coding-agent/src/core/provider-balance.ts`                          | 余额协议、运行时凭据输入、缓存、去重、订阅和格式化      | 新增文件，保持唯一实现                                       |
-| `packages/coding-agent/src/core/footer-data-provider.ts`                       | 向原生和自定义 footer 提供经过设置过滤的 extension statuses | 三个开关必须对 `setFooter()` 自定义 footer 同样生效          |
-| `packages/coding-agent/src/extensions/status-footer.ts`                       | TPS、定时余额、命令及独立 `tps`/`balance` status 发布   | 不要重新合并 status key；检查 extension event/context 变化   |
-| `packages/coding-agent/src/extensions/preset.ts`                              | `/preset` 与独立 `preset` status 发布                   | preset reload 后必须恢复状态                                 |
-| `packages/coding-agent/src/extensions/index.ts`                               | 注册 preset 和 status-footer 两个隐藏内置扩展           | 两个本地功能共享冲突点                                       |
-| `packages/coding-agent/src/modes/interactive/components/model-selector.ts`    | 两级状态机、搜索、scope、目录刷新、余额展示             | 接近整体改写，是上游同步热点                                 |
-| `packages/coding-agent/src/modes/interactive/components/footer.ts`            | Pikit 风格 token/cache、状态排序/过滤和窄终端布局        | 保留右侧模型；balance 必须是最后一个本地状态                  |
-| `packages/coding-agent/src/core/settings-manager.ts`                          | `footer.showPreset/showTps/showBalance` 合并、读取与保存 | 保持默认 `true` 和 nested setting 的递归合并                  |
-| `packages/coding-agent/src/modes/interactive/components/settings-selector.ts` | 三个 footer 可见性开关                                  | 每项独立回调，不合并成单一开关                               |
-| `packages/coding-agent/src/modes/interactive/interactive-mode.ts`             | 设置值与回调接线、即时重绘                               | 切换可见性不应触发 reload                                    |
+| 文件                                                                            | 本地职责                                                    | 合并注意点                                                 |
+| ------------------------------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------- |
+| `packages/coding-agent/src/core/provider-balance.ts`                          | 余额协议、运行时凭据输入、缓存、去重、订阅和格式化          | 新增文件，保持唯一实现                                     |
+| `packages/coding-agent/src/core/footer-data-provider.ts`                      | 向原生和自定义 footer 提供经过设置过滤的 extension statuses | 三个开关必须对`setFooter()` 自定义 footer 同样生效       |
+| `packages/coding-agent/src/extensions/status-footer.ts`                       | TPS、定时余额、命令及独立`tps`/`balance` status 发布    | 不要重新合并 status key；检查 extension event/context 变化 |
+| `packages/coding-agent/src/extensions/preset.ts`                              | `/preset` 与独立 `preset` status 发布                   | preset reload 后必须恢复状态                               |
+| `packages/coding-agent/src/extensions/index.ts`                               | 注册 preset 和 status-footer 两个隐藏内置扩展               | 两个本地功能共享冲突点                                     |
+| `packages/coding-agent/src/modes/interactive/components/model-selector.ts`    | 两级状态机、搜索、scope、目录刷新、余额展示                 | 接近整体改写，是上游同步热点                               |
+| `packages/coding-agent/src/modes/interactive/components/footer.ts`            | Pikit 风格 token/cache、状态排序/过滤和窄终端布局           | 保留右侧模型；balance 必须是最后一个本地状态               |
+| `packages/coding-agent/src/core/settings-manager.ts`                          | `footer.showPreset/showTps/showBalance` 合并、读取与保存  | 保持默认`true` 和 nested setting 的递归合并              |
+| `packages/coding-agent/src/modes/interactive/components/settings-selector.ts` | 三个 footer 可见性开关                                      | 每项独立回调，不合并成单一开关                             |
+| `packages/coding-agent/src/modes/interactive/interactive-mode.ts`             | 设置值与回调接线、即时重绘                                  | 切换可见性不应触发 reload                                  |
 
 ## 上游同步流程
 
@@ -234,8 +234,7 @@ git range-diff <old-upstream>..<old-local-head> upstream/main..HEAD
 `model-selector.ts`。上游 #8356 把模型/思考级别改为会话级（Enter 只切换当前
 会话，Ctrl+S 持久化为默认），本地两级选择器需移植该语义：
 
-- 构造函数参数顺序变为 `(tui, currentModel, modelRuntime, scopedModels, onSelect,
-  onCancel, initialSearchInput?, onSelectAsDefault?, balanceService?)`；
+- 构造函数参数顺序变为 `(tui, currentModel, modelRuntime, scopedModels, onSelect, onCancel, initialSearchInput?, onSelectAsDefault?, balanceService?)`；
   `settingsManager` 参数随上游删除，`handleSelect` 不再调用
   `setDefaultModelAndProvider`。
 - Ctrl+S 只在 models 视图生效（providers 视图忽略），由

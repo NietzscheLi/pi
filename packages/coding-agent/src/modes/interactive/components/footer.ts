@@ -147,10 +147,8 @@ export class FooterComponent implements Component {
 		if (areExperimentalFeaturesEnabled()) {
 			statsParts.push(`${theme.fg("dim", "•")} ${theme.bold(theme.fg("warning", "xp"))}`);
 		}
-		const nativeStatsLeft = statsParts.join(" ");
-
 		const footerSettings = this.session.settingsManager.getFooterSettings();
-		const customStatusOrder = ["preset", "tps", "balance"];
+		const customStatusOrder = ["preset", "tps", "balance", "mcp"];
 		const statusEnabled = (key: string): boolean => {
 			if (key === "preset") return footerSettings.showPreset;
 			if (key === "tps") return footerSettings.showTps;
@@ -174,48 +172,38 @@ export class FooterComponent implements Component {
 
 		let statsLeft = statsParts.join(" ");
 
-		// Add model name on the right side, plus thinking level if model supports it
+		// Show provider, model, and thinking level before the working directory so they
+		// remain visible when the growing stats line is truncated.
 		const modelName = state.model?.id || "no-model";
-
-		// Calculate available space for padding (minimum 2 spaces between stats and model)
-		const minPadding = 2;
-
-		// Add thinking level indicator if model supports reasoning
-		let rightSideWithoutProvider = modelName;
+		let modelInfo = modelName;
 		if (state.model?.reasoning) {
 			const thinkingLevel = state.thinkingLevel || "off";
-			rightSideWithoutProvider =
-				thinkingLevel === "off" ? `${modelName} • thinking off` : `${modelName} • ${thinkingLevel}`;
+			modelInfo = thinkingLevel === "off" ? `${modelName} • thinking off` : `${modelName} • ${thinkingLevel}`;
+		}
+		if (state.model) {
+			modelInfo = `(${state.model.provider}) ${modelInfo}`;
 		}
 
-		// Prepend the provider in parentheses if there are multiple providers and there's enough room
-		let rightSide = rightSideWithoutProvider;
-		if (this.footerData.getAvailableProviderCount() > 1 && state.model) {
-			const withProvider = `(${state.model.provider}) ${rightSideWithoutProvider}`;
-			if (visibleWidth(nativeStatsLeft) + minPadding + visibleWidth(withProvider) <= width) rightSide = withProvider;
-		}
+		const minPadding = 2;
+		const minimumPwdWidth = Math.min(visibleWidth(pwd), Math.max(0, Math.floor(width * 0.45)));
+		const maximumModelWidth = Math.max(0, width - minimumPwdWidth - minPadding);
+		modelInfo = truncateToWidth(modelInfo, maximumModelWidth, "");
+		const modelInfoWidth = visibleWidth(modelInfo);
+		const availablePwdWidth = Math.max(0, width - modelInfoWidth - (modelInfoWidth > 0 ? minPadding : 0));
+		const truncatedPwd = truncateToWidth(pwd, availablePwdWidth, "...");
+		const truncatedPwdWidth = visibleWidth(truncatedPwd);
+		const pwdGapWidth = modelInfoWidth > 0 && truncatedPwdWidth > 0 ? minPadding : 0;
+		const pwdPadding = " ".repeat(Math.max(pwdGapWidth, width - modelInfoWidth - truncatedPwdWidth));
+		const pwdLine = theme.fg("dim", modelInfo + pwdPadding + truncatedPwd);
 
-		// Keep both native columns visible. Extension statuses are appended to the left,
-		// so they are the first content truncated when the terminal is narrow.
-		const minimumLeftWidth = Math.min(visibleWidth(nativeStatsLeft), Math.max(0, Math.floor(width * 0.45)));
-		const maximumRightWidth = Math.max(0, width - minimumLeftWidth - minPadding);
-		rightSide = truncateToWidth(rightSide, maximumRightWidth, "");
-		const rightSideWidth = visibleWidth(rightSide);
-		const availableLeft = Math.max(0, width - rightSideWidth - (rightSideWidth > 0 ? minPadding : 0));
-		statsLeft = truncateToWidth(statsLeft, availableLeft, "...");
-		const statsLeftWidth = visibleWidth(statsLeft);
-		const gapWidth = statsLeftWidth > 0 && rightSideWidth > 0 ? minPadding : 0;
-		const padding = " ".repeat(Math.max(gapWidth, width - statsLeftWidth - rightSideWidth));
-		const statsLine = statsLeft + padding + rightSide;
+		// Extension statuses are appended to the stats line, so they are the first
+		// content truncated when the terminal is narrow.
+		statsLeft = truncateToWidth(statsLeft, width, "...");
 
-		// Apply dim to each part separately. statsLeft may contain color codes (for context %)
-		// that end with a reset, which would clear an outer dim wrapper. So we dim the parts
-		// before and after the colored section independently.
+		// Apply dim to the stats line separately because its context percentage may
+		// contain color codes whose reset would clear an outer dim wrapper.
 		const dimStatsLeft = theme.fg("dim", statsLeft);
-		const remainder = statsLine.slice(statsLeft.length); // padding + rightSide
-		const dimRemainder = theme.fg("dim", remainder);
 
-		const pwdLine = truncateToWidth(theme.fg("dim", pwd), width, theme.fg("dim", "..."));
-		return [pwdLine, dimStatsLeft + dimRemainder];
+		return [pwdLine, dimStatsLeft];
 	}
 }
