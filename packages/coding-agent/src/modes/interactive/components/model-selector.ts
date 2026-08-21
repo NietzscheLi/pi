@@ -39,6 +39,11 @@ interface ScopedModelItem {
 	thinkingLevel?: string;
 }
 
+interface DefaultModelReference {
+	provider: string;
+	id: string;
+}
+
 type ModelScope = "all" | "scoped";
 type SelectorView = "providers" | "models";
 
@@ -81,6 +86,7 @@ export class ModelSelectorComponent extends Container implements Focusable {
 	private refreshStatusSuccess = false;
 	private tui: TUI;
 	private scopedModels: ReadonlyArray<ScopedModelItem>;
+	private defaultModel?: DefaultModelReference;
 	private scope: ModelScope = "all";
 	private view: SelectorView = "providers";
 	private scopeText?: Text;
@@ -102,6 +108,7 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		initialSearchInput?: string,
 		onSelectAsDefault?: (model: Model<any>) => void,
 		balanceService: ProviderBalanceReader = providerBalanceService,
+		defaultModel?: DefaultModelReference,
 	) {
 		super();
 
@@ -110,6 +117,7 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		this.modelRuntime = modelRuntime;
 		this.balanceService = balanceService;
 		this.scopedModels = scopedModels;
+		this.defaultModel = defaultModel;
 		this.scope = scopedModels.length > 0 ? "scoped" : "all";
 		this.onSelectCallback = onSelect;
 		this.onSelectAsDefaultCallback = onSelectAsDefault;
@@ -258,12 +266,16 @@ export class ModelSelectorComponent extends Container implements Focusable {
 
 	private sortModels(models: ModelItem[]): ModelItem[] {
 		const sorted = [...models];
-		// Sort: current model first, then by provider. Stable sort preserves provider catalog order.
+		// Sort: current model first, default model second, then by provider.
 		sorted.sort((a, b) => {
 			const aIsCurrent = modelsAreEqual(this.currentModel, a.model);
 			const bIsCurrent = modelsAreEqual(this.currentModel, b.model);
 			if (aIsCurrent && !bIsCurrent) return -1;
 			if (!aIsCurrent && bIsCurrent) return 1;
+			const aIsDefault = this.isDefaultModel(a.model);
+			const bIsDefault = this.isDefaultModel(b.model);
+			if (aIsDefault && !bIsDefault) return -1;
+			if (!aIsDefault && bIsDefault) return 1;
 			return a.provider.localeCompare(b.provider);
 		});
 		return sorted;
@@ -277,6 +289,10 @@ export class ModelSelectorComponent extends Container implements Focusable {
 
 	private getScopeHintText(): string {
 		return keyHint("tui.input.tab", "scope") + theme.fg("muted", " (all/scoped)");
+	}
+
+	private isDefaultModel(model: Model<any>): boolean {
+		return this.defaultModel?.provider === model.provider && this.defaultModel.id === model.id;
 	}
 
 	private setScope(scope: ModelScope): void {
