@@ -118,9 +118,47 @@ describe("InteractiveMode.showStatus", () => {
 	});
 });
 
-describe("InteractiveMode.showManagedToolStatus", () => {
-	beforeAll(() => initTheme("dark"));
+describe("InteractiveMode model persistence", () => {
+	test("persists a model selected through /model as the global default", async () => {
+		const model = { provider: "faux", id: "faux-1" };
+		const setModel = vi.fn().mockResolvedValue(undefined);
+		const fakeThis: any = {
+			findExactModelMatch: vi.fn().mockResolvedValue(model),
+			session: { setModel },
+			footer: { invalidate: vi.fn() },
+			updateEditorBorderColor: vi.fn(),
+			showStatus: vi.fn(),
+			maybeWarnAboutAnthropicSubscriptionAuth: vi.fn(),
+			checkDaxnutsEasterEgg: vi.fn(),
+		};
 
+		await (InteractiveMode as any).prototype.handleModelCommand.call(fakeThis, "faux-1");
+
+		expect(setModel).toHaveBeenCalledWith(model, { persist: true });
+	});
+
+	test("persists a model selected through model cycling as the global default", async () => {
+		const result = {
+			model: { provider: "faux", id: "faux-2", name: "Faux Two", reasoning: false },
+			thinkingLevel: "off",
+			isScoped: false,
+		};
+		const cycleModel = vi.fn().mockResolvedValue(result);
+		const fakeThis: any = {
+			session: { cycleModel, scopedModels: [] },
+			footer: { invalidate: vi.fn() },
+			updateEditorBorderColor: vi.fn(),
+			showStatus: vi.fn(),
+			maybeWarnAboutAnthropicSubscriptionAuth: vi.fn(),
+		};
+
+		await (InteractiveMode as any).prototype.cycleModel.call(fakeThis, "forward");
+
+		expect(cycleModel).toHaveBeenCalledWith("forward", { persist: true });
+	});
+});
+
+describe("InteractiveMode.showManagedToolStatus", () => {
 	test("renders tool updates as one contiguous group", () => {
 		const fakeThis: any = {
 			chatContainer: new Container(),

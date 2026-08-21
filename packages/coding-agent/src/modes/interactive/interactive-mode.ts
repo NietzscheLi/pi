@@ -4154,7 +4154,7 @@ export class InteractiveMode {
 
 	private async cycleModel(direction: "forward" | "backward"): Promise<void> {
 		try {
-			const result = await this.session.cycleModel(direction);
+			const result = await this.session.cycleModel(direction, { persist: true });
 			if (result === undefined) {
 				const msg = this.session.scopedModels.length > 0 ? "Only one model in scope" : "Only one model available";
 				this.showStatus(msg);
@@ -4831,7 +4831,7 @@ export class InteractiveMode {
 		const model = await this.findExactModelMatch(searchTerm);
 		if (model) {
 			try {
-				await this.session.setModel(model, { persist: false });
+				await this.session.setModel(model, { persist: true });
 				this.footer.invalidate();
 				this.updateEditorBorderColor();
 				this.showStatus(`Model: ${model.id}`);
@@ -4994,7 +4994,7 @@ export class InteractiveMode {
 				this.session.model,
 				this.session.modelRuntime,
 				this.session.scopedModels,
-				(model) => selectModel(model, false),
+				(model) => selectModel(model, true),
 				() => {
 					done();
 					this.ui.requestRender();
