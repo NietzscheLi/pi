@@ -124,9 +124,10 @@ export class FooterComponent implements Component {
 		const promptTokens = usageTotals.input + usageTotals.cacheRead + usageTotals.cacheWrite;
 		const cacheHitRate = promptTokens > 0 ? (usageTotals.cacheRead / promptTokens) * 100 : 0;
 		const statsParts = [
-			`T: ${formatTokens(totalTokens)} (${cacheHitRate.toFixed(1)}% cached)`,
-			`↑ ${formatTokens(usageTotals.input)}`,
-			`↓ ${formatTokens(usageTotals.output)}`,
+			theme.fg("accent", `T: ${formatTokens(totalTokens)}`),
+			theme.fg("muted", `(${cacheHitRate.toFixed(1)}% cached)`),
+			theme.fg("success", `↑ ${formatTokens(usageTotals.input)}`),
+			theme.fg("text", `↓ ${formatTokens(usageTotals.output)}`),
 		];
 
 		// Colorize context percentage based on usage
@@ -134,18 +135,21 @@ export class FooterComponent implements Component {
 		const autoIndicator = this.autoCompactEnabled ? " (auto)" : "";
 		const contextPercentDisplay =
 			contextPercent === "?"
-				? `?/${formatTokens(contextWindow)}${autoIndicator}`
-				: `${contextPercent}%/${formatTokens(contextWindow)}${autoIndicator}`;
+				? `?/${formatTokens(contextWindow)}`
+				: `${contextPercent}%/${formatTokens(contextWindow)}`;
 		if (contextPercentValue > 90) {
 			contextPercentStr = theme.fg("error", contextPercentDisplay);
 		} else if (contextPercentValue > 70) {
 			contextPercentStr = theme.fg("warning", contextPercentDisplay);
+		} else if (contextPercent === "?") {
+			contextPercentStr = theme.fg("muted", contextPercentDisplay);
 		} else {
-			contextPercentStr = contextPercentDisplay;
+			contextPercentStr = theme.fg("success", contextPercentDisplay);
 		}
+		contextPercentStr += theme.fg("dim", autoIndicator);
 		statsParts.push(contextPercentStr);
 		if (areExperimentalFeaturesEnabled()) {
-			statsParts.push(`${theme.fg("dim", "•")} ${theme.bold(theme.fg("warning", "xp"))}`);
+			statsParts.push(theme.bold(theme.fg("warning", "xp")));
 		}
 		const footerSettings = this.session.settingsManager.getFooterSettings();
 		const customStatusOrder = ["preset", "tps", "balance", "mcp"];
@@ -165,12 +169,21 @@ export class FooterComponent implements Component {
 				if (bIndex === -1) return 1;
 				return aIndex - bIndex;
 			})
-			.map(([, text]) => theme.fg("dim", sanitizeStatusText(text)));
+			.map(([key, text]) => {
+				const status = sanitizeStatusText(text);
+				if (key === "preset") return theme.fg("accent", status);
+				if (key === "tps") return theme.fg("success", status);
+				if (key === "balance") return theme.fg("warning", status);
+				return status;
+			});
 		for (const status of extensionStatuses) {
-			statsParts.push(theme.fg("dim", "•"), status);
+			statsParts.push(status);
 		}
 
-		let statsLeft = statsParts.join(" ");
+		let statsLeft = statsParts.slice(0, 4).join(" ");
+		for (const status of statsParts.slice(4)) {
+			statsLeft += ` ${theme.fg("dim", "•")} ${status}`;
+		}
 
 		// Show provider, model, and thinking level before the working directory so they
 		// remain visible when the growing stats line is truncated.
@@ -200,10 +213,8 @@ export class FooterComponent implements Component {
 		// content truncated when the terminal is narrow.
 		statsLeft = truncateToWidth(statsLeft, width, "...");
 
-		// Apply dim to the stats line separately because its context percentage may
-		// contain color codes whose reset would clear an outer dim wrapper.
-		const dimStatsLeft = theme.fg("dim", statsLeft);
-
-		return [pwdLine, dimStatsLeft];
+		// Each status segment already has its own theme color. MCP status text is left
+		// untouched so extensions can supply their own compatible styling.
+		return [pwdLine, statsLeft];
 	}
 }

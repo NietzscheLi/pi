@@ -236,10 +236,11 @@ describe("FooterComponent width handling", () => {
 
 		expect(locationLine).toContain("current-model");
 		expect(statsLine).toContain("12.3%/200k (auto) • preset:Vue • TPS 12.3 • 8 CNY • 🔌 MCP: 2 servers enabled");
-		expect(lines[1]).toContain(theme.fg("dim", "preset:Vue"));
-		expect(lines[1]).toContain(theme.fg("dim", "TPS 12.3"));
-		expect(lines[1]).toContain(theme.fg("dim", "8 CNY"));
-		expect(lines[1]).toContain(theme.fg("dim", "🔌 MCP: 2 servers enabled"));
+		expect(lines[1]).toContain(theme.fg("accent", "preset:Vue"));
+		expect(lines[1]).toContain(theme.fg("success", "TPS 12.3"));
+		expect(lines[1]).toContain(theme.fg("warning", "8 CNY"));
+		expect(lines[1]).toContain("🔌 MCP: 2 servers enabled");
+		expect(lines[1]).not.toContain(theme.fg("dim", "🔌 MCP: 2 servers enabled"));
 		expect(statsLine).not.toContain("balance");
 		expect(locationLine).toContain("current-model");
 	});
