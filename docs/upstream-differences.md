@@ -4,13 +4,13 @@
 
 ## 基线
 
-记录日期：2026-08-26（Asia/Shanghai）。
+记录日期：2026-08-21（Asia/Shanghai）。
 
 | 引用              | 提交                                         | 说明                                                 |
 | ----------------- | -------------------------------------------- | ---------------------------------------------------- |
-| `upstream/main` | `b7bb00b936dbe21b8e160b3e89efdec361846699` | 原始仓库`https://github.com/earendil-works/pi.git` |
-| `origin/main`   | `289080f07ef733863b0155eefca61058eb8cc38a` | 当前 fork`https://github.com/NietzscheLi/pi.git`   |
-| 本地`HEAD`      | `289080f07ef733863b0155eefca61058eb8cc38a` | 本次同步前的本地 HEAD（上一个合并提交）              |
+| `upstream/main` | `5cd93f688aaab89dbb6dfa4aca535f21796ae185` | 原始仓库`https://github.com/earendil-works/pi.git` |
+| `origin/main`   | `8152ba1ec4d988278b5de5a61eba911e3ed9d869` | 当前 fork`https://github.com/NietzscheLi/pi.git`   |
+| 本地`HEAD`      | `a0b361ada28fe6354d3bba03b1bc0822f67986b6` | 本次同步后的本地 HEAD（上一个合并提交）              |
 
 比较原始 pi 时以 `upstream/main` 为权威；`origin/main` 是本 fork 的远端，不再将未配置的 `target/main` 作为基线。
 
