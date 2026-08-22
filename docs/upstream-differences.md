@@ -8,9 +8,9 @@
 
 | 引用              | 提交                                         | 说明                                                 |
 | ----------------- | -------------------------------------------- | ---------------------------------------------------- |
-| `upstream/main` | `5cd93f688aaab89dbb6dfa4aca535f21796ae185` | 原始仓库`https://github.com/earendil-works/pi.git` |
-| `origin/main`   | `8152ba1ec4d988278b5de5a61eba911e3ed9d869` | 当前 fork`https://github.com/NietzscheLi/pi.git`   |
-| 本地`HEAD`      | `a0b361ada28fe6354d3bba03b1bc0822f67986b6` | 本次同步后的本地 HEAD（上一个合并提交）              |
+| `upstream/main` | `c49906ec77788625aacbdc53ebca6fbe65bd20f5` | 原始仓库`https://github.com/earendil-works/pi.git` |
+| `origin/main`   | `01221849a7b7b8216a73f3516fd02ecd5cbd141a` | 当前 fork`https://github.com/NietzscheLi/pi.git`   |
+| 本地`HEAD`      | `fef2026ff` | 本次同步后的本地 HEAD（合并提交）              |
 
 比较原始 pi 时以 `upstream/main` 为权威；`origin/main` 是本 fork 的远端，不再将未配置的 `target/main` 作为基线。
 
@@ -252,6 +252,20 @@ git range-diff <old-upstream>..<old-local-head> upstream/main..HEAD
 `agent-session-model-extension.test.ts`、`settings-selector.test.ts` 需要
 `availableDefaultModels`/`defaultModel`/`modelThinkingLevels` 配置字段。
 
+### 2026-08-22 增量同步（5 个上游提交）
+
+直接合并 `upstream/main`（`c49906ec7`）到 `main`。上游内容：Radius 分享实验
+（`interactive-mode.ts`）、会话分享链接简化、托管状态文件权限保留
+（`auth-storage.ts`）、slash 命令排序调整。
+
+唯一冲突文件：`packages/coding-agent/CHANGELOG.md`（`### Changed` 段），保留本地
+footer 改动条目并追加上游 session sharing 条目。`interactive-mode.ts` 自动合并
+成功，本地 `FooterDataProvider` 三个 footer 开关与预设/余额接线均保留。
+
+验证：13 个定向 Vitest 文件（回归门禁列表 + `auth-storage.test.ts` +
+`models-store.test.ts` + 两个 plan mode 测试）共 247 个用例全部通过；根目录
+`npm run check` 通过。
+
 ## 重点冲突处理顺序
 
 1. `settings-manager.ts`、`main.ts`、`package-manager.ts` 的预设优先级和启动契约。
@@ -305,7 +319,13 @@ pi --version
 
 ## 当前验证
 
-2026-08-26 对本次上游增量同步（`b7bb00b9` → `289080f0` 之上）完成：
+2026-08-22 对本次上游增量同步（`01221849a` 之上合并 `c49906ec7`）完成：
+
+- 13 个定向 Vitest 文件共 247 个用例全部通过（含 `auth-storage.test.ts`、
+  `models-store.test.ts` 两个本次上游修改的测试）。
+- 根目录 `npm run check` 通过。
+
+2026-08-26 对上次上游增量同步（`b7bb00b9` → `289080f0` 之上）完成：
 
 - 定向 Vitest：`model-selector.test.ts`、`settings-selector.test.ts`、
   `settings-manager.test.ts`、`footer-width.test.ts`、三个 suite/regressions、
