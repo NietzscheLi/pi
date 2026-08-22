@@ -198,6 +198,15 @@ MCP 注册表只定义服务器和选中的 ID，不提供 MCP 客户端实现�
 - 后台刷新按 provider/model ID 保留用户当前高亮，目标消失后才回退。
 - 余额只在高亮供应商变化时请求；共享请求完成后只刷新仍然高亮该供应商的界面。
 
+### 思考级别按模型持久化
+
+思考级别的 UI 切换（`/thinking <level>`、`/thinking` 选择器、`app.thinking.cycle`）
+与模型切换的持久化方式对齐：每次切换都通过 `settingsManager.setModelThinkingLevel`
+写入当前模型的 `modelThinkingLevels[provider/modelId]` 覆盖，下次选中该模型时由
+`_getThinkingLevelForModelSwitch` 恢复。选择器中的 Ctrl+S 额外写全局
+`defaultThinkingLevel`；普通 Enter 只写当前模型覆盖，不再改全局默认。设置面板
+（`settings-submenu.ts`）中的每模型覆盖仍是唯一删除入口。
+
 ### 关键文件
 
 | 文件                                                                            | 本地职责                                                    | 合并注意点                                                 |

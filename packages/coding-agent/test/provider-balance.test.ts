@@ -71,9 +71,9 @@ describe("ProviderBalanceService", () => {
 			}),
 		);
 
-		expect(await first).toMatchObject({ text: "12.5 CNY", loading: false });
-		expect(await second).toMatchObject({ text: "12.5 CNY", loading: false });
-		expect(states).toEqual(["true:--", "false:12.5 CNY"]);
+		expect(await first).toMatchObject({ text: "CNY12.5", loading: false });
+		expect(await second).toMatchObject({ text: "CNY12.5", loading: false });
+		expect(states).toEqual(["true:--", "false:CNY12.5"]);
 		await service.refresh("test.0", { resolveSource });
 		expect(fetchMock).toHaveBeenCalledOnce();
 
@@ -125,7 +125,7 @@ providers:
 
 		const resolveSource = async () => ({ baseUrl: "https://api.deepseek.com/v1", apiKey: "deepseek-key" });
 		const state = await service.refresh("deepseek.test", { resolveSource });
-		expect(state).toMatchObject({ text: "1.1 CNY", loading: false });
+		expect(state).toMatchObject({ text: "CNY1.1", loading: false });
 
 		const [url, init] = fetchMock.mock.calls[0] ?? [];
 		expect(url).toBe("https://api.deepseek.com/user/balance");
@@ -150,9 +150,9 @@ providers:
 		const service = new ProviderBalanceService({ agentDir, fetch: fetchMock });
 
 		const resolveSource = async () => ({ baseUrl: "https://models.example.test/v1", apiKey: "model-key" });
-		expect(await service.refresh("test.0", { resolveSource })).toMatchObject({ text: "5 CNY", loading: false });
+		expect(await service.refresh("test.0", { resolveSource })).toMatchObject({ text: "CNY5", loading: false });
 		expect(await service.refresh("test.0", { force: true, resolveSource })).toMatchObject({
-			text: "5 CNY",
+			text: "CNY5",
 			loading: false,
 			error: "account disabled",
 		});

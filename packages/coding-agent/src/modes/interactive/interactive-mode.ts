@@ -4148,6 +4148,7 @@ export class InteractiveMode {
 		if (newLevel === undefined) {
 			this.showStatus("Current model does not support thinking");
 		} else {
+			this.persistThinkingLevelForCurrentModel(newLevel);
 			this.footer.invalidate();
 			this.updateEditorBorderColor();
 			this.showStatus(`Thinking level: ${newLevel}`);
@@ -4792,12 +4793,28 @@ export class InteractiveMode {
 		this.selectThinkingLevel(level, false);
 	}
 
-	private selectThinkingLevel(level: ThinkingLevel, persist: boolean): void {
+	/**
+	 * Persist a thinking level for the current model, mirroring how model
+	 * switching persists the default model. The level is restored whenever
+	 * this model is selected again.
+	 */
+	private persistThinkingLevelForCurrentModel(level: ThinkingLevel): void {
+		const model = this.session.model;
+		if (model) {
+			this.settingsManager.setModelThinkingLevel(model.provider, model.id, level);
+		}
+	}
+
+	private selectThinkingLevel(level: ThinkingLevel, persistAsGlobalDefault: boolean): void {
 		try {
-			this.session.setThinkingLevel(level, { persist });
+			this.session.setThinkingLevel(level);
+			this.persistThinkingLevelForCurrentModel(level);
+			if (persistAsGlobalDefault) {
+				this.settingsManager.setDefaultThinkingLevel(level);
+			}
 			this.footer.invalidate();
 			this.updateEditorBorderColor();
-			this.showStatus(persist ? `Default thinking level: ${level}` : `Thinking level: ${level}`);
+			this.showStatus(persistAsGlobalDefault ? `Default thinking level: ${level}` : `Thinking level: ${level}`);
 		} catch (error) {
 			this.showError(error instanceof Error ? error.message : String(error));
 		}

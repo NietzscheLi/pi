@@ -270,9 +270,18 @@ export class ProviderBalanceService implements ProviderBalanceReader {
 		const body = (await response.json()) as unknown;
 		if (!isValidResponse(body, extractor)) throw new Error(responseError(body, extractor));
 
-		const remainingPath = stringValue(extractor.remainingPath, "extractor.remainingPath");
-		const remaining = numberValue(valueAt(body, remainingPath));
-		if (remaining === null) throw new Error(`Balance field is missing: ${remainingPath}`);
+		const remainingPath = extractor.remainingPath;
+		let remaining: number | null;
+		if (typeof remainingPath === "string" && remainingPath) {
+			remaining = numberValue(valueAt(body, remainingPath));
+			if (remaining === null) throw new Error(`Balance field is missing: ${remainingPath}`);
+		} else {
+			// remainingPath 为 null 时，由 total - used 自动计算剩余额度。
+			const total = numberValue(valueAt(body, stringValue(extractor.totalPath, "extractor.totalPath")));
+			const used = numberValue(valueAt(body, stringValue(extractor.usedPath, "extractor.usedPath")));
+			if (total === null || used === null) throw new Error("Balance fields are missing: total/used");
+			remaining = total - used;
+		}
 		const scale =
 			numberValue(extractor.scale) ??
 			(numberValue(extractor.multiplyBy) ?? 1) / (numberValue(extractor.divideBy) ?? 1);
@@ -281,7 +290,7 @@ export class ProviderBalanceService implements ProviderBalanceReader {
 		const responseUnit = unitPath ? valueAt(body, unitPath) : undefined;
 		const unit =
 			typeof responseUnit === "string" ? responseUnit : typeof extractor.unit === "string" ? extractor.unit : "";
-		return `${(remaining * scale).toLocaleString("en-US", { maximumFractionDigits: 4 })}${unit ? ` ${unit}` : ""}`;
+		return `${unit ? `${unit}` : ""}${(remaining * scale).toLocaleString("en-US", { maximumFractionDigits: 4 })}`;
 	}
 }
 

@@ -10,6 +10,7 @@
 
 - Changed the native footer to use a Pikit-style token/cache summary, replace usage cost with provider balance, and expose preset, TPS, and balance as independently configurable status items.
 - Changed session sharing to render clickable terminal links and Radius shares to display only the artifact's canonical URL.
+- Changed interactive thinking level switching (`/thinking`, selector, cycle key) to persist the level per current model via `modelThinkingLevels`, matching model-switch persistence; the selector's set-as-default key still updates the global default.
 
 ### Fixed
 
