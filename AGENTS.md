@@ -53,6 +53,7 @@
 - The upstream repository is `https://github.com/earendil-works/pi`.
 - This project is hosted on GitHub. Prefer GitHub CLI (`gh`) for GitHub repository, Issue, Pull Request, Actions, release, and related operations.
 - When merging branches from the upstream repository, read and follow [`docs/upstream-differences.md`](docs/upstream-differences.md). Use its change log and feature contracts to preserve local fork behavior while integrating upstream changes.
+- Every code change in this repository must keep [`docs/upstream-differences.md`](docs/upstream-differences.md) in sync: when a change adds or modifies local-only behavior (presets, balance/footer/model persistence, plan mode, etc.), update the corresponding feature contract and key-file table; when committing new local commits, add them to the 本地提交来源 table. Documentation-only changes are exempt unless they alter a documented contract.
 
 ## Git
 
