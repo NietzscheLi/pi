@@ -34,8 +34,9 @@ git diff --stat upstream/main...HEAD
 | 变更组                   | 当前状态                                      | 用户可见行为                                                            |
 | ------------------------ | --------------------------------------------- | ----------------------------------------------------------------------- |
 | 命名预设                 | 已提交：`cbd1ef0`                           | `--preset`、`/preset`、项目预设持久化、资源组合与切换回滚           |
-| 供应商余额与两级模型选择 | 已提交：`3120ee3`                           | 两级模型选择、共享供应商余额、定时刷新和`/update-balance`             |
-| Footer 独立状态与设置    | 当前工作树                                    | Pikit 风格 token/cache、独立 preset/TPS/balance、三个`/settings` 开关 |
+| 供应商余额与两级模型选择 | 已提交：`3120ee3`、`416dc195a`            | 两级模型选择、共享供应商余额（含数组响应）、定时刷新和`/update-balance` |
+| Footer 独立状态与设置    | 已提交：`fc3f37e16`、`0a9ff8f64`、`01221849a` | token/cache 统计、独立 preset/TPS/balance/MCP 状态、三个`/settings` 开关 |
+| 模型选择持久化           | 已提交：`8152ba1ec`、`8dfa0862e`          | `/model` 与交互模式模型切换均写入全局默认值                             |
 | Plan mode 逐项执行       | 已提交：`2ab2d2f`、`baa271b`、`d4714d2` | 内置 plan mode、稳定 task ID、逐项更新、恢复与持久化                    |
 | 项目默认工具预设         | 已提交：`b800f8f`                           | 当前项目`.pi/preset.json` 默认选择 `Tools`                          |
 
@@ -50,6 +51,12 @@ git diff --stat upstream/main...HEAD
 | `9c171c1` | 项目中英文 README 更新                        |
 | `2ab2d2f` | 内置 plan mode、默认配置与基础测试            |
 | `baa271b` | plan mode 按 task ID 逐项完成和调度           |
+| `fc3f37e16` | 可配置页脚状态与三个独立开关                |
+| `416dc195a` | 余额提取支持数组响应                        |
+| `0a9ff8f64` | footer 布局调整并补充 MCP 状态              |
+| `8152ba1ec` | `/model` 选择持久化为全局默认               |
+| `8dfa0862e` | 交互模式所有模型切换路径均持久化            |
+| `01221849a` | 页脚状态信息层次优化                        |
 | `d4714d2` | 配置锚点、plan 状态恢复及相关文档/测试修正    |
 | `b800f8f` | 将当前项目默认预设切换为`Tools`             |
 
@@ -157,13 +164,13 @@ MCP 注册表只定义服务器和选中的 ID，不提供 MCP 客户端实现�
 - 最近一个 assistant turn 计算输出 TPS。
 - TPS 与余额必须分别通过 `setStatus("tps", ...)` 和 `setStatus("balance", ...)` 发布；余额文本不带 `balance` 标签。
 
-命名预设继续通过 `setStatus("preset", ...)` 发布状态。三个本地状态不能重新合并成一个 `status-footer` 字符串，因为 footer 需要分别排序、截断和控制可见性。
+命名预设继续通过 `setStatus("preset", ...)` 发布状态。这些本地状态不能重新合并成一个 `status-footer` 字符串，因为 footer 需要分别排序、截断和控制可见性。
 
-`FooterDataProvider` 在返回 extension statuses 时应用三个设置开关，因此原生 footer 和通过 `setFooter()` 注册的自定义 footer 使用同一可见性契约。当前 Pikit footer 来自本地 fork `/home/hy/project/pikit`，通过独立 `preset`、`tps`、`balance` segment 读取这些状态；不要在 Pikit 中重复计算 TPS 或请求余额。
+`FooterDataProvider` 在返回 extension statuses 时应用三个设置开关，因此原生 footer 和通过 `setFooter()` 注册的自定义 footer 使用同一可见性契约。
 
-原生 `FooterComponent` 保持两行：第一行 cwd/branch/session；第二行左侧为 Pikit 风格的 `T: total (hit% cached) ↑ input ↓ output`、context 和扩展状态，右侧保留当前模型。cache 百分比按累计 `cacheRead / (input + cacheRead + cacheWrite)` 计算；费用不再显示，余额作为三个本地状态中的最后一项显示，且不带 `balance` 单词。
+原生 `FooterComponent` 保持两行：第一行左侧为 `(provider) model • thinking-level`（保证窄终端截断时仍可见），右侧为 cwd/branch/session；第二行为 Pikit 风格的 `T: total (hit% cached) ↑ input ↓ output`、context 百分比和扩展状态。cache 百分比按累计 `cacheRead / (input + cacheRead + cacheWrite)` 计算；费用不再显示，token 总量包含 summary、tool result 与 branch usage。
 
-本地状态固定顺序为 `preset`、`tps`、`balance`；其他 extension status 仍按 key 稳定排序并位于这些本地状态之前。窄终端优先截断左侧尾部状态并保留右侧模型；40、80、120 列都要覆盖。
+本地状态固定顺序为 `preset`、`tps`、`balance`、`mcp`；其他 extension status 仍按 key 稳定排序并位于这些本地状态之后。扩展状态超过首列宽度后用 `•` 分隔追加；40、80、120 列都要覆盖。
 
 `Settings.footer` 提供三个默认开启且可独立持久化的开关：
 
@@ -201,7 +208,7 @@ MCP 注册表只定义服务器和选中的 ID，不提供 MCP 客户端实现�
 | `packages/coding-agent/src/extensions/preset.ts`                              | `/preset` 与独立 `preset` status 发布                   | preset reload 后必须恢复状态                               |
 | `packages/coding-agent/src/extensions/index.ts`                               | 注册 preset 和 status-footer 两个隐藏内置扩展               | 两个本地功能共享冲突点                                     |
 | `packages/coding-agent/src/modes/interactive/components/model-selector.ts`    | 两级状态机、搜索、scope、目录刷新、余额展示                 | 接近整体改写，是上游同步热点                               |
-| `packages/coding-agent/src/modes/interactive/components/footer.ts`            | Pikit 风格 token/cache、状态排序/过滤和窄终端布局           | 保留右侧模型；balance 必须是最后一个本地状态               |
+| `packages/coding-agent/src/modes/interactive/components/footer.ts`            | token/cache 统计、状态排序/过滤和窄终端布局                 | 第一行左侧保留 provider/model/thinking；`mcp` 是最后一个本地状态           |
 | `packages/coding-agent/src/core/settings-manager.ts`                          | `footer.showPreset/showTps/showBalance` 合并、读取与保存  | 保持默认`true` 和 nested setting 的递归合并              |
 | `packages/coding-agent/src/modes/interactive/components/settings-selector.ts` | 三个 footer 可见性开关                                      | 每项独立回调，不合并成单一开关                             |
 | `packages/coding-agent/src/modes/interactive/interactive-mode.ts`             | 设置值与回调接线、即时重绘                                  | 切换可见性不应触发 reload                                  |
@@ -211,8 +218,8 @@ MCP 注册表只定义服务器和选中的 ID，不提供 MCP 客户端实现�
 1. 确认工作树干净，并建立可恢复分支。
 2. fetch `upstream/main` 和 `origin/main`，记录原始上游、fork 远端和本地 HEAD SHA。
 3. 从新的 `upstream/main` 建立集成分支。
-4. 按本地提交依赖顺序重放：`cbd1ef0`（preset）→ `3120ee3`（余额/模型/footer）→ `2ab2d2f`、`baa271b`、`d4714d2`（plan mode）→ `b800f8f`（项目默认预设）；文档提交 `9c171c1` 按目标分支 README 状态决定是否重放。
-5. 最后恢复当前工作树中的 footer 独立状态与设置改动。
+4. 按本地提交依赖顺序重放：`cbd1ef0`（preset）→ `3120ee3`、`416dc195a`（余额/模型/footer）→ `2ab2d2f`、`baa271b`、`d4714d2`（plan mode）→ `b800f8f`（项目默认预设）→ `fc3f37e16`、`0a9ff8f64`、`01221849a`（footer 状态与布局）→ `8152ba1ec`、`8dfa0862e`（模型选择持久化）；文档提交（`9c171c1` 等）按目标分支 README 状态决定是否重放。
+5. 所有长期功能均已提交，无需从工作树恢复改动；若同步时存在未提交的本地修改，先整理成独立提交再合并。
 6. 以新上游文件结构为基础逐块恢复本地契约，不对冲突文件整份选择 ours。
 7. 用 `range-diff` 检查重放前后本地语义是否丢失。
 
@@ -270,7 +277,7 @@ footer 改动条目并追加上游 session sharing 条目。`interactive-mode.ts
 
 1. `settings-manager.ts`、`main.ts`、`package-manager.ts` 的预设优先级和启动契约。
 2. `model-selector.ts` 的上游目录刷新与本地两级状态机。
-3. `footer.ts` 的 token/cache 统计、独立状态排序/过滤和右侧模型保留逻辑。
+3. `footer.ts` 的 token/cache 统计、独立状态排序/过滤和第一行左侧 provider/model/thinking 保留逻辑。
 4. `settings-manager.ts`、`settings-selector.ts`、`interactive-mode.ts` 的三个 footer 开关及即时重绘。
 5. `extensions/index.ts`、`interactive-mode.ts`、`agent-session.ts` 的接线和生命周期。
 6. tests、CHANGELOG 和使用文档。
